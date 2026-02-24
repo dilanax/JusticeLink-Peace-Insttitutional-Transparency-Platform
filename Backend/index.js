@@ -1,12 +1,22 @@
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import cors from "cors";
 import userRoutes from "./Routes/userRoutes.js";
 import notificationRoutes from "./Routes/notificationRoutes.js";
 
 dotenv.config();
 
 const app = express();
+
+// CORS Configuration
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json());
 
 mongoose
