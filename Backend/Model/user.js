@@ -60,6 +60,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "suspended"],
       default: "active"
+    },
+
+    otp: {
+      type: String,
+      default: null
+    },
+
+    otpExpiry: {
+      type: Date,
+      default: null
+    },
+
+    otpVerified: {
+      type: Boolean,
+      default: false
     }
   },
   { timestamps: true }
