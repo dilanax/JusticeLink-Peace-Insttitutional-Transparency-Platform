@@ -9,5 +9,4 @@ export default function generateID() {
 
             return year + month + day + hours + minutes + seconds;
 
-            
         }
