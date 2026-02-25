@@ -27,6 +27,16 @@ const feedbackSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ⭐ NEW FIELDS FOR SENTIMENT API
+    sentiment: {
+      type: String,
+      default: "neutral",
+    },
+    sentimentScore: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

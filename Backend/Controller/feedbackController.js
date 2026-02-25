@@ -1,14 +1,44 @@
 import Feedback from "../Model/Feedback.js";
+import axios from "axios";
 
+/**
+ * Sentiment analysis using external API (text-processing)
+ */
+const analyzeSentiment = async (text) => {
+  try {
+    const response = await axios.post(
+      "http://text-processing.com/api/sentiment/",
+      new URLSearchParams({ text }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+
+    return {
+      type: response.data.label, // pos / neg / neutral
+      score: response.data.probability.pos,
+    };
+  } catch (error) {
+    console.log("Sentiment API error:", error.message);
+    return { type: "neutral", score: 0 };
+  }
+};
+
+/**
+ * CREATE FEEDBACK
+ */
 export const createFeedback = async (req, res) => {
   try {
     const { comment, evidenceUrl } = req.body;
+
+    // ⭐ analyze sentiment from comment
+    const sentimentData = await analyzeSentiment(comment);
 
     const feedback = await Feedback.create({
       promiseId: req.params.promiseId,
       userId: req.user.id,
       comment,
       evidenceUrl,
+      sentiment: sentimentData.type,
+      sentimentScore: sentimentData.score,
     });
 
     res.status(201).json(feedback);
@@ -17,6 +47,9 @@ export const createFeedback = async (req, res) => {
   }
 };
 
+/**
+ * GET FEEDBACK BY PROMISE
+ */
 export const getFeedbackByPromise = async (req, res) => {
   try {
     const feedback = await Feedback.find({
@@ -29,6 +62,9 @@ export const getFeedbackByPromise = async (req, res) => {
   }
 };
 
+/**
+ * VOTE FEEDBACK
+ */
 export const voteFeedback = async (req, res) => {
   try {
     const { type } = req.body; // up or down
@@ -48,6 +84,9 @@ export const voteFeedback = async (req, res) => {
   }
 };
 
+/**
+ * UPDATE FEEDBACK
+ */
 export const updateFeedback = async (req, res) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
@@ -68,6 +107,9 @@ export const updateFeedback = async (req, res) => {
   }
 };
 
+/**
+ * DELETE FEEDBACK
+ */
 export const deleteFeedback = async (req, res) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
