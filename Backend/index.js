@@ -3,45 +3,27 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import userRoutes from "./Routes/userRoutes.js";
 import promiseRoutes from "./Routes/promiseRoutes.js";
+import politicianRoutes from "./Routes/politicianRoutes.js";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
-import politicianRoutes from "./Routes/politicianRoutes.js";
 
+// 1. Load environment variables first
 dotenv.config();
 
+// 2. Define the PORT before using it anywhere else!
+const PORT = process.env.PORT || 5000;
+
+// 3. Initialize Express
 const app = express();
 app.use(express.json());
 
-// Connect to MongoDB then register routes and start server
-mongoose
-  .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, family: 4 })
-  .then(() => {
-    console.log("MongoDB Connected");
-
-    // Register routes after DB connection (ensures models/populate work)
-    app.use("/api/users", userRoutes);
-    app.use("/api/promises", promiseRoutes);
-    app.use("/api/politicians", politicianRoutes);
-    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-    // Start server when DB is available
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err.message || err);
-    console.error(err);
-    process.exit(1);
-  });
-
-const PORT = process.env.PORT || 5000;
-
-// Minimal Swagger setup
+// 4. Set up Swagger Documentation
 const swaggerDefinition = {
   openapi: "3.0.0",
   info: {
-    title: "Backend API",
+    title: "Janaya360 Backend API",
     version: "1.0.0",
-    description: "Minimal API docs",
+    description: "API documentation for the political tracking platform",
   },
   servers: [
     {
@@ -92,10 +74,33 @@ const swaggerDefinition = {
 
 const options = {
   swaggerDefinition,
-  // Scan route files for JSDoc OpenAPI comments
-  apis: ["./Routes/*.js"],
+  apis: ["./Routes/*.js"], // Scans your routes for JSDoc comments
 };
 
 const swaggerSpec = swaggerJsdoc(options);
 
-// Note: routes and server start are performed after DB connection above.
+// 5. Connect to MongoDB and start the server
+mongoose
+  .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, family: 4 })
+  .then(() => {
+    console.log("MongoDB Connected Successfully!");
+
+    // Register routes after DB connection
+    app.use("/api/users", userRoutes);
+    app.use("/api/promises", promiseRoutes);
+    app.use("/api/politicians", politicianRoutes);
+    
+    // Register Swagger UI
+    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message || err);
+    console.error(err);
+    process.exit(1);
+  });
