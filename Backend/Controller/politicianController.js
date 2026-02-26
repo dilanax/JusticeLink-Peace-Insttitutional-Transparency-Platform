@@ -4,7 +4,6 @@ import Politician from "../Model/Politician.js";
 export const createPolitician = async (req, res) => {
   try {
     const { name, party, district } = req.body;
-
     const politician = await Politician.create({
       name,
       party,
