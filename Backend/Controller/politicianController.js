@@ -1,7 +1,7 @@
 import Politician from '../Model/Politician.js';
 
 
-// GET all politicians
+// GET all politicians (Public)
 export const getPoliticians = async (req, res) => {
   try {
     const { name, party, district } = req.query;
@@ -23,7 +23,7 @@ export const getPoliticians = async (req, res) => {
 };
 
 
-// GET single politician
+// GET single politician (Public)
 export const getPoliticianById = async (req, res) => {
   try {
     const politician = await Politician.findById(req.params.id);
@@ -43,9 +43,18 @@ export const getPoliticianById = async (req, res) => {
 };
 
 
-// CREATE politician (Admin protected via middleware)
+
+// 🔐 CREATE politician (ADMIN ONLY)
 export const createPolitician = async (req, res) => {
   try {
+
+    // 🔥 EXTRA SECURITY CHECK
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
+      });
+    }
+
     const { name, party, district } = req.body;
 
     if (!name || !party || !district) {
@@ -71,9 +80,17 @@ export const createPolitician = async (req, res) => {
 };
 
 
-// UPDATE politician (Admin protected via middleware)
+
+// 🔐 UPDATE politician (ADMIN ONLY)
 export const updatePolitician = async (req, res) => {
   try {
+
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
+      });
+    }
+
     const updatedPolitician = await Politician.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -95,9 +112,17 @@ export const updatePolitician = async (req, res) => {
 };
 
 
-// DELETE politician (Admin protected via middleware)
+
+// 🔐 DELETE politician (ADMIN ONLY)
 export const deletePolitician = async (req, res) => {
   try {
+
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
+      });
+    }
+
     const politician = await Politician.findByIdAndDelete(req.params.id);
 
     if (!politician) {
