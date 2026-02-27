@@ -37,7 +37,7 @@ export const getPoliticianById = async (req, res) => {
 export const createPolitician = async (req, res) => {
   try {
     if (req.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
+      return res.status(403).json({ message: `Access denied. Your role is ${req.role}` });
     }
     else if (!req.body.name || !req.body.party || !req.body.district) {
       return res.status(400).json({ message: "Name, party, and district are required" });
@@ -56,7 +56,7 @@ export const createPolitician = async (req, res) => {
 export const updatePolitician = async (req, res) => {
   try {
     if (req.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
+      return res.status(403).json({ message: `Access denied. Your role is ${req.role}` });
     }
     const updatedPolitician = await Politician.findByIdAndUpdate(
       req.params.id,
