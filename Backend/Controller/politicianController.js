@@ -1,29 +1,17 @@
-import Politician from "../Model/Politician.js";
+import Politician from '../Model/Politician.js';
 
 
-// ==============================
-// GET ALL POLITICIANS (Public)
-// ==============================
+// GET all politicians (Public)
 export const getPoliticians = async (req, res) => {
   try {
     const { name, party, district } = req.query;
-
     let query = {};
 
-    if (name) {
-      query.name = { $regex: name, $options: "i" };
-    }
-
-    if (party) {
-      query.party = party;
-    }
-
-    if (district) {
-      query.district = district;
-    }
+    if (name) query.name = { $regex: name, $options: 'i' };
+    if (party) query.party = party;
+    if (district) query.district = district;
 
     const politicians = await Politician.find(query);
-
     res.status(200).json(politicians);
 
   } catch (error) {
@@ -35,17 +23,13 @@ export const getPoliticians = async (req, res) => {
 };
 
 
-// ==============================
-// GET SINGLE POLITICIAN (Public)
-// ==============================
+// GET single politician (Public)
 export const getPoliticianById = async (req, res) => {
   try {
     const politician = await Politician.findById(req.params.id);
 
     if (!politician) {
-      return res.status(404).json({
-        message: "Politician not found"
-      });
+      return res.status(404).json({ message: "Politician not found" });
     }
 
     res.status(200).json(politician);
@@ -59,16 +43,23 @@ export const getPoliticianById = async (req, res) => {
 };
 
 
-// ==============================
-// CREATE POLITICIAN (Admin Only)
-// ==============================
+
+// 🔐 CREATE politician (ADMIN ONLY)
 export const createPolitician = async (req, res) => {
   try {
+
+    // 🔥 EXTRA SECURITY CHECK
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
+      });
+    }
+
     const { name, party, district } = req.body;
 
     if (!name || !party || !district) {
       return res.status(400).json({
-        message: "Name, party and district are required"
+        message: "Name, party, and district are required"
       });
     }
 
@@ -89,11 +80,17 @@ export const createPolitician = async (req, res) => {
 };
 
 
-// ==============================
-// UPDATE POLITICIAN (Admin Only)
-// ==============================
+
+// 🔐 UPDATE politician (ADMIN ONLY)
 export const updatePolitician = async (req, res) => {
   try {
+
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
+      });
+    }
+
     const updatedPolitician = await Politician.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -101,37 +98,39 @@ export const updatePolitician = async (req, res) => {
     );
 
     if (!updatedPolitician) {
-      return res.status(404).json({
-        message: "Politician not found"
-      });
+      return res.status(404).json({ message: "Politician not found" });
     }
 
     res.status(200).json(updatedPolitician);
 
   } catch (error) {
     res.status(400).json({
-      message: "Error updating politician",
+      message: "Error updating profile",
       error: error.message
     });
   }
 };
 
 
-// ==============================
-// DELETE POLITICIAN (Admin Only)
-// ==============================
+
+// 🔐 DELETE politician (ADMIN ONLY)
 export const deletePolitician = async (req, res) => {
   try {
-    const deletedPolitician = await Politician.findByIdAndDelete(req.params.id);
 
-    if (!deletedPolitician) {
-      return res.status(404).json({
-        message: "Politician not found"
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied. Admin only"
       });
     }
 
+    const politician = await Politician.findByIdAndDelete(req.params.id);
+
+    if (!politician) {
+      return res.status(404).json({ message: "Politician not found" });
+    }
+
     res.status(200).json({
-      message: "Politician deleted successfully"
+      message: "Politician successfully removed"
     });
 
   } catch (error) {
