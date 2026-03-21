@@ -1,87 +1,101 @@
-import Politician from '../Model/Politician.js';
+import Politician from "../Model/Politician.js";
 
-// @desc    Get all politicians (with optional search by name, party, or district)
-// @route   GET /api/politicians
-// @access  Public
-export const getPoliticians = async (req, res) => {
+/* ================= CREATE ================= */
+// Admin Only
+export const createPolitician = async (req, res) => {
   try {
-    const { name, party, district } = req.query;
-    let query = {};
-    if (name) query.name = { $regex: name, $options: 'i' }; // Case-insensitive search
-    if (party) query.party = party;
-    if (district) query.district = district;
 
-    const politicians = await Politician.find(query);
-    res.status(200).json(politicians);
+    const politician = await Politician.create({
+      ...req.body,
+      createdBy: req.user._id
+    });
+
+    res.status(201).json({
+      message: "Politician created successfully",
+      politician
+    });
+
   } catch (error) {
-    res.status(500).json({ message: "Failed to fetch politicians", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Get a single politician by ID
-// @route   GET /api/politicians/:id
-// @access  Public
+
+/* ================= READ ALL ================= */
+export const getAllPoliticians = async (req, res) => {
+  try {
+    const politicians = await Politician.find();
+    res.json(politicians);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+/* ================= READ ONE ================= */
 export const getPoliticianById = async (req, res) => {
   try {
     const politician = await Politician.findById(req.params.id);
-    if (!politician) return res.status(404).json({ message: "Politician not found" });
-    res.status(200).json(politician);
+
+    if (!politician) {
+      return res.status(404).json({ message: "Politician not found" });
+    }
+
+    res.json(politician);
+
   } catch (error) {
-    res.status(500).json({ message: "Error retrieving politician", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Create a new politician profile
-// @route   POST /api/politicians
-// @access  Private/Admin
-export const createPolitician = async (req, res) => {
-  try {
-    if (req.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-    else if (!req.body.name || !req.body.party || !req.body.district) {
-      return res.status(400).json({ message: "Name, party, and district are required" });
-    }
-    const { name, party, district } = req.body;
-    const newPolitician = await Politician.create({ name, party, district });
-    res.status(201).json(newPolitician);
-  } catch (error) {
-    res.status(400).json({ message: "Invalid data", error: error.message });
-  }
-};
 
-// @desc    Update politician details (e.g., changed party)
-// @route   PUT /api/politicians/:id
-// @access  Private/Admin
+/* ================= UPDATE ================= */
+// Admin Only
 export const updatePolitician = async (req, res) => {
   try {
-    if (req.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
+
+    const politician = await Politician.findById(req.params.id);
+
+    if (!politician) {
+      return res.status(404).json({ message: "Politician not found" });
     }
-    const updatedPolitician = await Politician.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!updatedPolitician) return res.status(404).json({ message: "Politician not found" });
-    res.status(200).json(updatedPolitician);
+
+    politician.name = req.body.name || politician.name;
+    politician.party = req.body.party || politician.party;
+    politician.district = req.body.district || politician.district;
+    politician.position = req.body.position || politician.position;
+    politician.bio = req.body.bio || politician.bio;
+    politician.profileImageUrl = req.body.profileImageUrl || politician.profileImageUrl;
+
+    const updated = await politician.save();
+
+    res.json({
+      message: "Politician updated successfully",
+      politician: updated
+    });
+
   } catch (error) {
-    res.status(400).json({ message: "Error updating profile", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Delete a politician
-// @route   DELETE /api/politicians/:id
-// @access  Private/Admin
+
+/* ================= DELETE ================= */
+// Admin Only
 export const deletePolitician = async (req, res) => {
   try {
-    if (req.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
+
+    const politician = await Politician.findById(req.params.id);
+
+    if (!politician) {
+      return res.status(404).json({ message: "Politician not found" });
     }
-    const politician = await Politician.findByIdAndDelete(req.params.id);
-    if (!politician) return res.status(404).json({ message: "Politician not found" });
-    res.status(200).json({ message: "Politician successfully removed" });
+
+    await politician.deleteOne();
+
+    res.json({ message: "Politician deleted successfully" });
+
   } catch (error) {
-    res.status(500).json({ message: "Error deleting politician", error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
