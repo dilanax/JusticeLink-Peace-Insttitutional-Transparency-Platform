@@ -1,10 +1,10 @@
 
 import './App.css';
-import Home from './pages/Home';
+import PledgeTrack from './pages/Home';
 
 function App() {
   return (
-    <Home />
+    <PledgeTrack />
   );
 }
 
