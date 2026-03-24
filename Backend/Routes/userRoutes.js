@@ -8,6 +8,8 @@ import {
   sendOTP,
   verifyOTP,
   updateUser,
+  getCurrentUser,
+  updateCurrentUser,
 } from "../Controller/userController.js";
 
 import { protect } from "../Middleware/authMiddleware.js";
@@ -19,6 +21,8 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/send-otp", sendOTP);
 router.post("/verify-otp", verifyOTP);
+router.get("/me", protect, getCurrentUser);
+router.put("/me", protect, updateCurrentUser);
 router.get("/", protect, authorizeRoles("admin"), getUsers);
 router.put("/:id", protect, authorizeRoles("admin"), updateUser);
 router.get("/search/email", protect, authorizeRoles("admin"), searchUserByEmail);

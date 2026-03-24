@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import CountUp from 'react-countup';
 import { useInView } from 'react-intersection-observer';
 import {
@@ -93,6 +94,13 @@ const TOP_POLITICIANS = [
   { name:'Ranil Wickremesinghe', party:'UNP', kept:85, total:120, rating:70.8, color: C.parliament[600] },
 ];
 
+const formatDate = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString();
+};
+
 /* ── STATUS CONFIG ────────────────────────────────────────────── */
 const statusCfg = {
   'Kept':        { bg: C.status.keptBg,  text: C.status.keptText  },
@@ -107,7 +115,7 @@ const NAV = [
   { label:'Politicians',   icon:Users,           path:'/politicians',     badge:'89'  },
   { label:'Promises',      icon:FileText,        path:'/promises',        badge:'247' },
   { label:'Feedback',      icon:MessageSquare,   path:'/feedback',        badge:'12'  },
-  { label:'News',          icon:Newspaper,       path:'/news',            badge:null  },
+  { label:'News',          icon:Newspaper,       path:'/admin-dashboard', hash:'#news-management', badge:null  },
   { label:'Notifications', icon:Bell,            path:'/notifications',   badge:'5'   },
   { label:'Users',         icon:Users,           path:'/users',           badge:null  },
   { label:'Settings',      icon:Settings,        path:'/settings',        badge:null  },
@@ -172,6 +180,127 @@ const AdminDashboard = () => {
   const navigate  = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [ref, inView] = useInView({ triggerOnce:true, threshold:0.1 });
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const [users, setUsers] = useState([]);
+  const [newsItems, setNewsItems] = useState([]);
+  const [dataError, setDataError] = useState('');
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const isUsersPage = location.pathname === '/users';
+  const renderUsersTable = () => (
+    <div style={{ background:'#fff', borderRadius:16, padding:'20px', border:`1px solid ${C.gray[200]}` }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <div>
+          <div style={{ fontSize:14, fontWeight:700, color: C.gray[900] }}>All Users</div>
+          <div style={{ fontSize:11, color: C.gray[400], marginTop:4 }}>
+            {isDataLoading ? 'Loading users...' : `${users.length} users found in the database`}
+          </div>
+        </div>
+        <Link to="/admin-dashboard" style={{ fontSize:12, color: C.parliament[600], textDecoration:'none', display:'flex', alignItems:'center', gap:2 }}>
+          Back to dashboard <ChevronRight size={12}/>
+        </Link>
+      </div>
+
+      {dataError && (
+        <div style={{
+          marginBottom: 16,
+          background: '#FEF2F2',
+          border: `1px solid ${C.status.brokColor}`,
+          color: C.status.brokText,
+          borderRadius: 14,
+          padding: '14px 16px',
+          fontSize: 14,
+          fontWeight: 600,
+        }}>
+          {dataError}
+        </div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        {users.map((user) => (
+          <div key={user._id} style={{
+            display:'grid',
+            gridTemplateColumns:'1.2fr 1.2fr 0.7fr 0.8fr 0.8fr',
+            gap:12,
+            alignItems:'center',
+            padding:'14px 16px',
+            borderRadius:12,
+            background:C.gray[50],
+            border:`1px solid ${C.gray[200]}`,
+          }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:C.gray[900] }}>{user.name}</div>
+              <div style={{ fontSize:10, color:C.gray[400] }}>{user._id}</div>
+            </div>
+            <div style={{ fontSize:12, color:C.gray[700], whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              {user.email}
+            </div>
+            <div style={{ fontSize:12, color:C.gray[700] }}>
+              {user.phone || 'No phone'}
+            </div>
+            <div style={{ fontSize:12, color:C.gray[700] }}>
+              {user.district || 'No district'}
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <span style={{
+                fontSize:10,
+                fontWeight:700,
+                padding:'4px 9px',
+                borderRadius:99,
+                background:user.role === 'admin' ? C.parliament[100] : C.gray[100],
+                color:user.role === 'admin' ? C.parliament[700] : C.gray[700],
+              }}>
+                {user.role}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {!isDataLoading && users.length === 0 && (
+          <div style={{ fontSize:12, color:C.gray[500] }}>No users to display yet.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('userInfo');
+
+    if (!storedUser) {
+      navigate('/login');
+      return;
+    }
+
+    const parsedUser = JSON.parse(storedUser);
+    if (parsedUser.role !== 'admin') {
+      navigate('/');
+      return;
+    }
+
+    const fetchDashboardData = async () => {
+      setIsDataLoading(true);
+      setDataError('');
+
+      try {
+        const headers = {
+          Authorization: `Bearer ${parsedUser.token}`,
+        };
+
+        const [usersResponse, newsResponse] = await Promise.all([
+          axios.get(`${API_URL}/api/users`, { headers }),
+          axios.get(`${API_URL}/api/news`, { headers }),
+        ]);
+
+        setUsers(Array.isArray(usersResponse.data) ? usersResponse.data : []);
+        setNewsItems(Array.isArray(newsResponse.data) ? newsResponse.data : []);
+      } catch (error) {
+        setDataError(error.response?.data?.message || 'Failed to load admin dashboard data.');
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [API_URL, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('userInfo');
@@ -251,9 +380,15 @@ const AdminDashboard = () => {
               )}
               {items.map(item => {
                 const Icon   = item.icon;
-                const active = location.pathname === item.path;
+                const active = item.hash
+                  ? location.pathname === item.path && location.hash === item.hash
+                  : location.pathname === item.path;
                 return (
-                  <Link key={item.path} to={item.path} style={{ textDecoration:'none' }}>
+                  <Link
+                    key={`${item.path}${item.hash || ''}`}
+                    to={item.hash ? `${item.path}${item.hash}` : item.path}
+                    style={{ textDecoration:'none' }}
+                  >
                     <div style={{
                       display:'flex', alignItems:'center', gap:10,
                       padding: sidebarOpen ? '10px 18px' : '10px 0',
@@ -344,9 +479,13 @@ const AdminDashboard = () => {
                 {[0,1,2].map(i => <div key={i} style={{ width:18, height:1.5, background: C.gray[500], borderRadius:2 }} />)}
               </div>
             </button>
-            <div>
-              <div style={{ fontSize:16, fontWeight:700, color: C.gray[900] }}>Overview Dashboard</div>
-              <div style={{ fontSize:11, color: C.gray[400] }}>Welcome back, Admin</div>
+          <div>
+              <div style={{ fontSize:16, fontWeight:700, color: C.gray[900] }}>
+                {isUsersPage ? 'User Management' : 'Overview Dashboard'}
+              </div>
+              <div style={{ fontSize:11, color: C.gray[400] }}>
+                {isUsersPage ? 'All registered users from the database' : 'Welcome back, Admin'}
+              </div>
             </div>
           </div>
 
@@ -402,6 +541,10 @@ const AdminDashboard = () => {
 
         {/* Scrollable content */}
         <div style={{ flex:1, overflowY:'auto', padding:'24px 28px' }}>
+          {isUsersPage ? (
+            renderUsersTable()
+          ) : (
+          <>
 
           {/* Stat cards */}
           <div ref={ref} style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
@@ -575,6 +718,110 @@ const AdminDashboard = () => {
               ))}
             </div>
           </div>
+
+          {dataError && (
+            <div style={{
+              marginTop: 20,
+              background: '#FEF2F2',
+              border: `1px solid ${C.status.brokColor}`,
+              color: C.status.brokText,
+              borderRadius: 16,
+              padding: '14px 16px',
+              fontSize: 14,
+              fontWeight: 600,
+            }}>
+              {dataError}
+            </div>
+          )}
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:20 }}>
+            <div id="user-management" style={{ background:'#fff', borderRadius:16, padding:'20px', border:`1px solid ${C.gray[200]}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color: C.gray[900] }}>User Management</div>
+                  <div style={{ fontSize:11, color: C.gray[400], marginTop:4 }}>
+                    {isDataLoading ? 'Loading users...' : `${users.length} users found`}
+                  </div>
+                </div>
+                <Link to="/users" style={{ fontSize:12, color: C.parliament[600], textDecoration:'none', display:'flex', alignItems:'center', gap:2 }}>
+                  View all <ChevronRight size={12}/>
+                </Link>
+              </div>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {users.slice(0, 6).map((user) => (
+                  <div key={user._id} style={{
+                    display:'flex',
+                    alignItems:'center',
+                    justifyContent:'space-between',
+                    gap:12,
+                    padding:'12px 14px',
+                    borderRadius:12,
+                    background:C.gray[50],
+                    border:`1px solid ${C.gray[200]}`,
+                  }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.gray[900] }}>{user.name}</div>
+                      <div style={{ fontSize:11, color:C.gray[500], whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                        {user.email}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:user.role === 'admin' ? C.parliament[700] : C.gray[700] }}>
+                        {user.role}
+                      </div>
+                      <div style={{ fontSize:10, color:C.gray[400] }}>
+                        {user.district || 'No district'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {!isDataLoading && users.length === 0 && (
+                  <div style={{ fontSize:12, color:C.gray[500] }}>No users to display yet.</div>
+                )}
+              </div>
+            </div>
+
+            <div id="news-management" style={{ background:'#fff', borderRadius:16, padding:'20px', border:`1px solid ${C.gray[200]}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color: C.gray[900] }}>News Management</div>
+                  <div style={{ fontSize:11, color: C.gray[400], marginTop:4 }}>
+                    {isDataLoading ? 'Loading news...' : `${newsItems.length} news items found`}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {newsItems.slice(0, 6).map((news) => (
+                  <div key={news._id} style={{
+                    padding:'12px 14px',
+                    borderRadius:12,
+                    background:C.gray[50],
+                    border:`1px solid ${C.gray[200]}`,
+                  }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.gray[900], marginBottom:4 }}>
+                      {news.title || 'Untitled news item'}
+                    </div>
+                    <div style={{ fontSize:11, color:C.gray[500], marginBottom:6 }}>
+                      {news.politician || news.source || 'News record'}
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:10, color:C.gray[400] }}>
+                      <span>{news.source || 'Unknown source'}</span>
+                      <span>{formatDate(news.publishedAt || news.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {!isDataLoading && newsItems.length === 0 && (
+                  <div style={{ fontSize:12, color:C.gray[500] }}>No news records to display yet.</div>
+                )}
+              </div>
+            </div>
+          </div>
+          </>
+          )}
 
         </div>
       </div>

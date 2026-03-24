@@ -2,6 +2,21 @@ import axios from "axios";
 import News from "../Model/News.js";
 
 // ===============================
+// GET ALL NEWS (ADMIN)
+// ===============================
+export const getAllNews = async (req, res) => {
+  try {
+    const news = await News.find().sort({ createdAt: -1 });
+    return res.json(news);
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch news list",
+      error: error.message,
+    });
+  }
+};
+
+// ===============================
 // GET LIVE NEWS FROM GNEWS
 // ===============================
 export const getNewsByPolitician = async (req, res) => {

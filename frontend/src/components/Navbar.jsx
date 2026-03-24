@@ -189,6 +189,11 @@ const Navbar = () => {
     marginBottom: 2,
   });
 
+  const openProfile = () => {
+    setMenuOpen(false);
+    navigate('/profile');
+  };
+
   return (
     <>
       {/* inject Inter font once */}
@@ -256,7 +261,20 @@ const Navbar = () => {
               {userInfo ? (
                 <>
                   {/* User avatar + name */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 10, background: C.orangeBg }}>
+                  <button
+                    onClick={openProfile}
+                    title="View profile"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '5px 10px',
+                      borderRadius: 10,
+                      background: C.orangeBg,
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%',
                       background: `linear-gradient(135deg, ${C.orange}, ${C.orangeHov})`,
@@ -268,7 +286,7 @@ const Navbar = () => {
                     <span style={{ fontSize: 13, fontWeight: 600, color: C.orange }}>
                       {userInfo.name}
                     </span>
-                  </div>
+                  </button>
 
                   <button
                     onClick={() => setShowLogout(true)}
@@ -363,12 +381,26 @@ const Navbar = () => {
               <div style={{ borderTop: `1px solid ${C.gray100}`, marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {userInfo ? (
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px', background: C.orangeBg, borderRadius: 10 }}>
+                    <button
+                      onClick={openProfile}
+                      title="View profile"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        padding: '8px 12px',
+                        background: C.orangeBg,
+                        borderRadius: 10,
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
                       <div style={{ width: 30, height: 30, borderRadius: '50%', background: `linear-gradient(135deg,${C.orange},${C.orangeHov})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: C.white }}>
                         {userInfo.name?.charAt(0).toUpperCase() || 'U'}
                       </div>
                       <span style={{ fontSize: 14, fontWeight: 600, color: C.orange }}>{userInfo.name}</span>
-                    </div>
+                    </button>
                     <button
                       onClick={() => setShowLogout(true)}
                       style={{

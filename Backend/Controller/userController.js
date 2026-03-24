@@ -16,6 +16,17 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+const buildAuthUserResponse = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone,
+  district: user.district,
+  role: user.role,
+  status: user.status,
+  token: generateToken(user._id, user.role),
+});
+
 // Configure email transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -76,13 +87,7 @@ export const registerUser = async (req, res) => {
       role: role || "citizen"
     });
 
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id, user.role),
-    });
+    res.status(201).json(buildAuthUserResponse(user));
 
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -223,11 +228,7 @@ export const verifyOTP = async (req, res) => {
 
     res.json({
       message: "OTP verified successfully",
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id, user.role),
+      ...buildAuthUserResponse(user),
     });
 
   } catch (error) {
@@ -261,14 +262,58 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id, user.role),
-    });
+    res.json(buildAuthUserResponse(user));
 
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET CURRENT USER PROFILE
+export const getCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const updateCurrentUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.name = req.body.name || user.name;
+    user.phone = req.body.phone || user.phone;
+    user.district = req.body.district || user.district;
+
+    if (req.body.password) {
+      user.password = req.body.password;
+    }
+
+    const updatedUser = await user.save();
+
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone,
+        district: updatedUser.district,
+        role: updatedUser.role,
+        status: updatedUser.status,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

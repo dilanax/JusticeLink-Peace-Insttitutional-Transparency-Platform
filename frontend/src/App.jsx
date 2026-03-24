@@ -10,6 +10,7 @@ import News from './components/News';
 import Notifications from './components/Notifications';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Profile from './pages/Profile';
 import './App.css';
 import AdminDashboard from './pages/admindashboard';
 
@@ -27,8 +28,10 @@ function App() {
           <Route path="/news" element={<News />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/login" element={<Login />} />
-            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/users" element={<AdminDashboard />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
         <Toaster position="top-right" />
       </div>

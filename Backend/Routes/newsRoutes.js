@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getAllNews,
   getPoliticalTrends,
   getArchivedNews,
   verifyNewsForPromise,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.get("/social/trends", getPoliticalTrends);
 
 // 🔐 Admin Only
+router.get("/", protect, authorizeRoles("admin"), getAllNews);
 router.get("/archive/:id", protect, authorizeRoles("admin"), getArchivedNews);
 router.post("/verify/:id", protect, authorizeRoles("admin"), verifyNewsForPromise);
 router.delete("/link/:id", protect, authorizeRoles("admin"), removeLinkedNews);

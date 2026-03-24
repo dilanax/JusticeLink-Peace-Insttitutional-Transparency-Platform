@@ -44,7 +44,28 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading]       = useState(false);
   const navigate = useNavigate();
-  const API_URL  = import.meta.env.VITE_API_URL;
+  const API_URL  = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  const getCachedProfile = (userEmail) => {
+    try {
+      const cache = JSON.parse(localStorage.getItem('userProfileCache') || '{}');
+      return cache[userEmail?.toLowerCase()] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const mergeUserProfile = (baseUser, incomingUser = {}) => ({
+    ...baseUser,
+    ...incomingUser,
+    name: incomingUser.name || baseUser?.name || '',
+    email: incomingUser.email || baseUser?.email || '',
+    phone: incomingUser.phone || baseUser?.phone || '',
+    district: incomingUser.district || baseUser?.district || '',
+    role: incomingUser.role || baseUser?.role || '',
+    status: incomingUser.status || baseUser?.status || 'active',
+    token: incomingUser.token || baseUser?.token,
+  });
 
   useEffect(() => {
     const savedUser = localStorage.getItem('userInfo');
@@ -61,10 +82,30 @@ const Login = () => {
     setError('');
     try {
       const { data } = await axios.post(`${API_URL}/api/users/login`, { email, password });
-      localStorage.setItem('userInfo', JSON.stringify(data));
+
+      let userInfo = data;
+
+      try {
+        const profileResponse = await axios.get(`${API_URL}/api/users/me`, {
+          headers: {
+            Authorization: `Bearer ${data.token}`,
+          },
+        });
+
+        userInfo = mergeUserProfile(data, { ...profileResponse.data, token: data.token });
+      } catch {
+        // Fall back to the login payload if profile refresh fails.
+      }
+
+      const cachedProfile = getCachedProfile(userInfo.email);
+      if (cachedProfile) {
+        userInfo = mergeUserProfile(cachedProfile, userInfo);
+      }
+
+      localStorage.setItem('userInfo', JSON.stringify(userInfo));
       window.dispatchEvent(new Event('authChange'));
       toast.success('Login successful');
-      if (data.role === 'admin') navigate('/admin-dashboard');
+      if (userInfo.role === 'admin') navigate('/admin-dashboard');
       else navigate('/');
     } catch (apiError) {
       setError(apiError.response?.data?.message || 'Login failed. Please try again.');
