@@ -384,6 +384,29 @@ export async function getMyNotifications(req, res) {
         ? new mongoose.Types.ObjectId(req.user._id)
         : req.user._id;
 
+    // For admin users, return all notifications for management purposes
+    if (req.user.role === 'admin') {
+      const allNotifications = await Notification.find()
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const data = allNotifications.map(notif => ({
+        _id: notif._id,
+        id: notif._id,
+        notificationId: notif._id,
+        title: notif.title,
+        body: notif.body,
+        message: notif.body,
+        type: notif.type,
+        status: notif.status,
+        createdAt: notif.createdAt || notif.sendDate,
+        sendDate: notif.sendDate
+      }));
+
+      return res.json(data);
+    }
+
+    // For regular users, get their personal notifications
     const rows = await UserNotification.aggregate([
       { $match: { user_id: userId } },
       {
@@ -416,6 +439,7 @@ export async function getMyNotifications(req, res) {
       notificationId: r.notification._id,
       title: r.notification.title,
       body: r.notification.body,
+      message: r.notification.body,
       type: r.notification.type,
       status: r.notification.status,
       createdAt: r.notification.sendDate || r.createdAt,
@@ -633,30 +657,87 @@ export async function createNotificationForUser(req, res) {
 
 
 export async function updateNotification(req, res) {
-  const id = req.params.id;
+  try {
+    const id = req.params.id;
+    const { title, body, type } = req.body;
 
-  Notification.findOneAndUpdate(
-    { $or: [{ _id: id }, { notificationID: id }] }, 
-    { ...req.body, updatedAt: new Date() },
-    { new: true }
-  )
-    .then((notifi) => {
-      if (!notifi) {
-        return res.status(404).json({ message: "Notification not found" });
+    // Validate input
+    if (!title || !body) {
+      return res.status(400).json({ message: 'Title and body are required' });
+    }
+
+    // Validate notification type if provided
+    if (type) {
+      const validTypes = ["general", "complaint_update", "emergency_alert"];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid notification type. Must be one of: ${validTypes.join(', ')}` });
       }
-      res.json({ message: "Notification Updated Successfully", notification: notifi });
-    })
-    .catch((err) => {
-      console.error("Notification update failed:", err);
-      res.status(500).json({ message: "Notification update failed" });
+    }
+
+    // Update the notification
+    const updateData = {
+      title: title.trim(),
+      body: body.trim(),
+      updatedAt: new Date()
+    };
+
+    if (type) {
+      updateData.type = type;
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    res.json({ 
+      message: "Notification updated successfully", 
+      notification: notification 
     });
+  } catch (error) {
+    console.error("Notification update failed:", error);
+    res.status(500).json({ 
+      message: "Notification update failed", 
+      error: error.message 
+    });
+  }
 }
 
 
-export function deleteNotification(req, res) {
-  Notification.findOneAndDelete({ _id: req.params.id })
-    .then(() => res.json({ message: 'Notification was Deleted' }))
-    .catch(() => res.status(500).json({ message: 'Notification deletion failed' }));
+export async function deleteNotification(req, res) {
+  try {
+    const id = req.params.id;
+
+    if (!id) {
+      return res.status(400).json({ message: 'Notification ID is required' });
+    }
+
+    // Delete the notification
+    const notification = await Notification.findByIdAndDelete(id);
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Also delete associated user notifications
+    await UserNotification.deleteMany({ NIC: id });
+
+    res.json({ 
+      message: 'Notification deleted successfully',
+      notificationId: id
+    });
+  } catch (error) {
+    console.error("Notification deletion failed:", error);
+    res.status(500).json({ 
+      message: "Notification deletion failed", 
+      error: error.message 
+    });
+  }
 }
 
 
@@ -670,9 +751,43 @@ export async function markAsRead(req, res) {
         : req.user._id;
 
     const { notificationId } = req.params;
+    const isAdmin = req.user.role === 'admin';
 
+    // For admin users marking all as read
+    if (!notificationId && isAdmin) {
+      const result = await Notification.updateMany(
+        { status: { $ne: 'read' } },
+        { $set: { status: 'read', updatedAt: new Date() } }
+      );
+      
+      return res.json({ 
+        success: true, 
+        modified: result.modifiedCount || 0,
+        message: 'All notifications marked as read'
+      });
+    }
+
+    // For admin marking a specific notification as read
+    if (notificationId && isAdmin) {
+      const result = await Notification.findByIdAndUpdate(
+        notificationId,
+        { $set: { status: 'read', updatedAt: new Date() } },
+        { new: true }
+      );
+      
+      if (!result) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+      
+      return res.json({ 
+        success: true,
+        message: 'Notification marked as read',
+        notification: result
+      });
+    }
+
+    // For regular users - specific notification
     if (notificationId) {
-      // Mark specific notification as read
       const result = await UserNotification.updateOne(
         { user_id: userId, NIC: notificationId },
         { $set: { readStatus: true, readAt: new Date() } }
@@ -684,7 +799,7 @@ export async function markAsRead(req, res) {
         message: 'Notification marked as read'
       });
     } else {
-      // Mark all notifications as read
+      // For regular users - mark all as read
       const result = await UserNotification.updateMany(
         { user_id: userId, readStatus: false },
         { $set: { readStatus: true, readAt: new Date() } }
@@ -698,7 +813,7 @@ export async function markAsRead(req, res) {
     }
   } catch (error) {
     console.error('markAsRead error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
 
@@ -779,6 +894,46 @@ export async function getNotificationStats(req, res) {
         ? new mongoose.Types.ObjectId(req.user._id)
         : req.user._id;
 
+    const isAdmin = req.user.role === 'admin';
+
+    // For admin users, count all notifications
+    if (isAdmin) {
+      const totalCount = await Notification.countDocuments();
+      const unreadCount = await Notification.countDocuments({ status: 'unread' });
+      const readCount = await Notification.countDocuments({ status: 'read' });
+      const archivedCount = await Notification.countDocuments({ status: 'archived' });
+      const overdueCount = await Notification.countDocuments({ status: 'overdue' });
+
+      const typeStats = await Notification.aggregate([
+        {
+          $group: {
+            _id: '$type',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const statusStats = await Notification.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      return res.json({
+        total: totalCount,
+        unread: unreadCount,
+        read: readCount,
+        archived: archivedCount,
+        overdue: overdueCount,
+        byType: typeStats,
+        byStatus: statusStats
+      });
+    }
+
+    // For regular users, count their personal notifications
     const totalCount = await UserNotification.countDocuments({ user_id: userId });
     const unreadCount = await UserNotification.countDocuments({ user_id: userId, readStatus: false });
     const readCount = await UserNotification.countDocuments({ user_id: userId, readStatus: true });

@@ -207,10 +207,23 @@ const Notifications = () => {
   const markAllAsRead = async () => {
     try {
       setActionLoading(true);
-      await api.patch('/read');
-      setNotifications((prev) => prev.map((item) => ({ ...item, status: 'read' })));
-      setStats((prev) => ({ ...prev, read: prev.total, unread: 0 }));
-      toast.success('All notifications marked as read');
+      const response = await api.patch('/read');
+      
+      console.log('Mark all as read response:', response.data);
+
+      // Update all notifications to 'read' status
+      setNotifications((prev) =>
+        prev.map((item) => ({ ...item, status: 'read' }))
+      );
+
+      // Update stats
+      setStats((prev) => ({
+        ...prev,
+        read: prev.total,
+        unread: 0,
+      }));
+
+      toast.success(`${response.data.modified || 'All'} notifications marked as read`);
     } catch (error) {
       console.error('Error marking all as read:', error);
       toast.error(error.response?.data?.message || 'Failed to mark all as read');
@@ -442,7 +455,7 @@ const Notifications = () => {
               {!isAdmin && (
                 <button
                   onClick={markAllAsRead}
-                  disabled={!hasUnread || loading || actionLoading}
+                  disabled={stats.unread === 0 || loading || actionLoading}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: `linear-gradient(135deg, ${C.parliament[600]}, ${C.parliament[500]})` }}
                 >
