@@ -20,7 +20,7 @@ router.get("/:promiseId", getFeedbackByPromise);
 router.post("/:feedbackId/vote", voteFeedback);
 
 // ✅ Update feedback by feedbackId
-router.patch("/:id", protect, updateFeedback);
+router.patch("/:id",  updateFeedback);
 
 // ✅ Delete feedback by feedbackId
 router.delete("/:id", deleteFeedback);

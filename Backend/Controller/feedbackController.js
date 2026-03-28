@@ -34,7 +34,10 @@ export const createFeedback = async (req, res) => {
 
     const feedback = await Feedback.create({
       promiseId: req.params.promiseId,  // promiseId from URL
-      userId: req.user.id,              // logged-in user
+      
+    // ✅ Allow anonymous citizen feedback
+    userId: req.user ? req.user.id : null,
+            // logged-in user
       comment,
       evidenceUrl,
       sentiment: sentimentData.type,
@@ -89,24 +92,32 @@ export const voteFeedback = async (req, res) => {
  */
 export const updateFeedback = async (req, res) => {
   try {
-    const feedback = await Feedback.findById(req.params.id);
+    const { id } = req.params;
+    const { comment, evidenceUrl } = req.body;
 
-    if (!feedback) return res.status(404).json({ message: "Not found" });
+    const updatedFeedback = await Feedback.findByIdAndUpdate(
+      id,
+      {
+        ...(comment !== undefined && { comment }),
+        ...(evidenceUrl !== undefined && { evidenceUrl }),
+      },
+      {
+        new: true,          // ✅ return updated doc
+        runValidators: true
+      }
+    );
 
-    if (feedback.userId.toString() !== req.user.id)
-      return res.status(403).json({ message: "Unauthorized" });
+    if (!updatedFeedback) {
+      return res.status(404).json({ message: "Feedback not found" });
+    }
 
-    feedback.comment = req.body.comment || feedback.comment;
-    feedback.evidenceUrl = req.body.evidenceUrl || feedback.evidenceUrl;
-
-    await feedback.save();
-
-    res.json(feedback);
+    res.status(200).json(updatedFeedback);
   } catch (err) {
+    console.error("Update feedback error:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
+``
 /**
  * DELETE FEEDBACK
  */
@@ -114,11 +125,11 @@ export const deleteFeedback = async (req, res) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
 
-    if (!feedback) return res.status(404).json({ message: "Not found" });
+    if (!feedback) {
+      return res.status(404).json({ message: "Not found" });
+    }
 
-    if (feedback.userId.toString() !== req.user.id)
-      return res.status(403).json({ message: "Unauthorized" });
-
+    // ✅ Public delete allowed for demo
     await feedback.deleteOne();
 
     res.json({ message: "Deleted" });

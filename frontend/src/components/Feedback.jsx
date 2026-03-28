@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const Feedback = () => {
+const Feedback = ({ promiseId }) => {
   const [comment, setComment] = useState("");
   const [feedbackList, setFeedbackList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
 
-  // 🔴 Replace this with real ID later
-  const promiseId = "69a6af84dea6363b079b02ac";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const activePromiseId = promiseId || "69a6af84dea6363b079b02ac";
 
-  // GET feedback
   const getFeedback = async () => {
     try {
-      const res = await axios.get(
-        `http://localhost:5000/api/feedback/${promiseId}`
-      );
+      const res = await axios.get(`${API_URL}/api/feedback/${activePromiseId}`);
       setFeedbackList(res.data);
     } catch (err) {
       console.log(err);
@@ -21,116 +21,210 @@ const Feedback = () => {
   };
 
   useEffect(() => {
-    getFeedback();
-  }, []);
+    if (activePromiseId) getFeedback();
+  }, [activePromiseId]);
 
-  // CREATE feedback
   const addFeedback = async () => {
-    try {
-      await axios.post(
-        `http://localhost:5000/api/feedback/${promiseId}`,
-        { comment }
-      );
+    if (!comment.trim()) return;
 
+    try {
+      setLoading(true);
+      await axios.post(`${API_URL}/api/feedback/${activePromiseId}`, { comment });
       setComment("");
+      getFeedback();
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const vote = async (id, type) => {
+    try {
+      await axios.post(`${API_URL}/api/feedback/${id}/vote`, { type });
       getFeedback();
     } catch (err) {
       console.log(err);
     }
   };
-  // VOTE FUNCTION
-const vote = async (id, type) => {
-  try {
-    await axios.post(
-      `http://localhost:5000/api/feedback/${id}/vote`,
-      { type }
-    );
-    getFeedback();
-  } catch (err) {
-    console.log(err);
-  }
-};
 
-// DELETE FUNCTION
-const deleteFeedback = async (id) => {
+  const deleteFeedback = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this feedback?")) return;
+
+    try {
+      await axios.delete(`${API_URL}/api/feedback/${id}`);
+      getFeedback();
+    } catch (err) {
+      console.log(err);
+    }
+  };
+const updateFeedback = async (id) => {
   try {
-    await axios.delete(
-      `http://localhost:5000/api/feedback/${id}`
+    await axios.patch(`${API_URL}/api/feedback/${id}`, {
+      comment: editText,
+    });
+
+    // ✅ Update UI immediately
+    setFeedbackList((prev) =>
+      prev.map((item) =>
+        item._id === id ? { ...item, comment: editText } : item
+      )
     );
-    getFeedback();
+
+    setEditingId(null);
+    setEditText("");
   } catch (err) {
     console.log(err);
   }
 };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">
-        Citizen Feedback
-      </h1>
+    <div className="bg-gray-50 py-10">
+      <div className="max-w-7xl mx-auto px-7">
 
-      {/* Input */}
-      <textarea
-        className="w-full p-3 border border-gray-300 rounded mb-3"
-        placeholder="Write your feedback..."
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-      />
+        {/* Header */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Citizen Feedback
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Share your opinion and help ensure accountability
+          </p>
+        </div>
 
-      {/* Button */}
-      <button
-        onClick={addFeedback}
-       className="bg-parliament-600 text-white px-4 py-2 rounded hover:bg-parliament-700"
-      >
-        Submit Feedback
+        {/* Info banner */}
+        <div className="bg-parliament-50 border border-parliament-200 rounded-lg p-3 mb-5 text-sm text-parliament-800">
+          Citizen feedback helps ensure transparency, accountability, and trust
+          in public governance.
+        </div>
+
+        {/* Form + Image */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6">
+            {/* Form */}
+            <div>
+              <textarea
+                className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-sm"
+                rows={4}
+                maxLength={300}
+                placeholder="Write your feedback as a citizen..."
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
+
+              <div className="text-xs text-gray-400 text-right mt-1">
+                {comment.length} / 300 characters
+              </div>
+
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={addFeedback}
+                  disabled={!comment.trim() || loading}
+                  className={`px-5 py-2 rounded-lg text-sm font-medium text-white ${
+                    !comment.trim() || loading
+                      ? "bg-parliament-600 opacity-50 cursor-not-allowed"
+                      : "bg-parliament-600 hover:bg-parliament-700"
+                  }`}
+                >
+                  {loading ? "Submitting..." : "Submit Feedback"}
+                </button>
+              </div>
+            </div>
+
+            {/* Image */}
+            <div className="flex items-center justify-center">
+              
+             <img
+             src="/feedback-citizen.jpg"
+             alt="Citizen engagement"
+             className="max-h-96 w-full object-cover rounded-lg"
+             />
+            </div>
+          </div>
+        </div>
+
+        {/* Feedback list */}
+        <div className="space-y-4">
+          {feedbackList.length === 0 && (
+            <div className="text-sm text-gray-500 text-center mt-6">
+              No feedback yet. Be the first citizen to comment.
+            </div>
+          )}
+
+          {feedbackList.map((item) => (
+            <div
+              key={item._id}
+              className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm"
+            >
+              {editingId === item._id ? (
+              <textarea
+              className="w-full border p-2 rounded text-sm"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+            />
+          ) : (
+                <p className="text-gray-700 text-sm">{item.comment}</p>
+          )}
+
+
+              <p className="text-xs text-gray-500 mt-1">
+                Sentiment: {item.sentiment}
+              </p>
+
+              <p className="text-xs text-gray-400 mt-1">
+                {new Date(item.createdAt).toLocaleDateString()}
+              </p>
+
+              <div className="flex gap-2 mt-3">
+              <button
+              onClick={() => vote(item._id, "up")}
+              className="px-3 py-1 rounded-full bg-[#DCFCE7] text-[#14532D]"
+              >
+              👍 {item.upvotes}
+             </button>
+
+             <button
+             onClick={() => vote(item._id, "down")}
+            className="px-3 py-1 rounded-full bg-[#FEE2E2] text-[#7F1D1D]"
+             >
+             👎 {item.downvotes}
+            </button>
+
+           <button
+          onClick={() => deleteFeedback(item._id)}
+          className="text-xs text-gray-400 hover:text-red-600"
+          >
+         Delete
+        </button>
+
+        {/* ✅ EDIT BUTTON */}
+        {editingId !== item._id && (
+        <button
+        onClick={() => {
+        setEditingId(item._id);
+        setEditText(item.comment);
+      }}
+      className="text-xs text-blue-600 hover:underline"
+       >
+       Edit
       </button>
+    )}
 
-      <hr className="my-6" />
+      {/* ✅ SAVE BUTTON */}
+      {editingId === item._id && (
+     <button
+      onClick={() => updateFeedback(item._id)}
+      className="text-xs text-green-600 hover:underline"
+     >
+      Save
+    </button>
+    )}
+   </div>
+            </div>
+          ))}
+        </div>
 
-      {/* Display feedback */}
-    {feedbackList.map((item) => (
-  <div
-    key={item._id}
-    className="bg-white p-4 mb-4 rounded shadow border"
-  >
-    {/* COMMENT */}
-    <p className="text-gray-800 font-medium">{item.comment}</p>
-
-    {/* SENTIMENT */}
-    <p className="text-sm mt-1 text-gray-500">
-      Sentiment: {item.sentiment}
-    </p>
-
-    {/* BUTTONS */}
-    <div className="mt-3 flex gap-3">
-
-      {/* 👍 UPVOTE */}
-      <button
-        onClick={() => vote(item._id, "up")}
-        className="bg-green-500 text-white px-3 py-1 rounded"
-      >
-        👍 {item.upvotes}
-      </button>
-
-      {/* 👎 DOWNVOTE */}
-      <button
-        onClick={() => vote(item._id, "down")}
-        className="bg-red-500 text-white px-3 py-1 rounded"
-      >
-        👎 {item.downvotes}
-      </button>
-
-      {/* DELETE */}
-      <button
-        onClick={() => deleteFeedback(item._id)}
-        className="bg-gray-500 text-white px-3 py-1 rounded"
-      >
-        Delete
-      </button>
-
-    </div>
-  </div>
-))}
+      </div>
     </div>
   );
 };
