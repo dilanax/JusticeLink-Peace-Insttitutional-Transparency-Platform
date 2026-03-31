@@ -35,7 +35,7 @@ const AppContent = () => {
           <Route path="/" element={<Home />} />
           <Route path="/politicians" element={<Politicians />} />
           <Route path="/promises" element={<Promises />} />
-          <Route path="/feedback" element={<Feedback />} />
+          <Route path="/feedback" element={<Feedback />} /> // ✅ Public
           <Route path="/news" element={<News />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/login" element={<Login />} />
@@ -47,6 +47,7 @@ const AppContent = () => {
           {/* Notice how we use /admin- prefix so they don't collide with your public pages */}
           {/* SECURE ADMIN ROUTES */}
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/admin-feedback" element={<AdminDashboard />} /> // ✅ Admin
 
           {/* Make sure this line exists! */}
           <Route path="/admin-promises" element={<AdminDashboard />} />
