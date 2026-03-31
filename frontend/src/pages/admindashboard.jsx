@@ -261,6 +261,23 @@ const AdminDashboard = () => {
     setNewsItems(Array.isArray(response.data) ? response.data : []);
   };
 
+  const fetchFeedback = async () => {
+  try {
+    const res = await axios.get(
+      `${API_URL}/api/feedback/69a6af84dea6363b079b02ac`,
+      { headers: getAuthHeaders() }
+    );
+    setFeedbackItems(Array.isArray(res.data) ? res.data : []);
+  } catch (error) {
+    console.error('Failed to load feedback', error);
+  }
+};
+
+
+  const handleUserFormChange = (field, value) => {
+    setUserForm(prev => ({ ...prev, [field]: value }));
+  };
+  
   const handleUserFormChange = (field, value) => { setUserForm(prev => ({ ...prev, [field]: value })); };
 
   const handleUserSearch = async (event) => {
@@ -654,6 +671,36 @@ const AdminDashboard = () => {
         <div style={{ flex:1, overflowY:'auto', padding:'24px 28px' }}>
           
           {/* --- DYNAMIC RENDERING BLOCK --- */}
+          {/* --- DYNAMIC RENDERING BLOCK --- */}
+{isUsersPage ? (
+  renderUsersTable()
+) : isNewsPage ? (
+  renderNewsTable()
+) : isFeedbackPage ? (
+  renderFeedbackManagement()
+) : isPromisesPage ? (
+  <PromisesManagement />
+) : (
+  <>
+    {/* Overview Dashboard */}
+
+    <div
+      ref={ref}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4,1fr)',
+        gap: 16,
+        marginBottom: 24,
+      }}
+    >
+      {STATS.map((s, i) => (
+        <StatCard key={i} stat={s} inView={inView} />
+      ))}
+    </div>
+
+    {/* keep the rest of dashboard JSX BELOW as-is */}
+  </>
+)}
           {isUsersPage ? (
             renderUsersTable()
           ) : isNewsPage ? (
@@ -825,8 +872,8 @@ const AdminDashboard = () => {
               {dataError}
             </div>
           )}
-          </>
-          )}
+          
+          
 
         </div>
       </div>
