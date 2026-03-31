@@ -289,9 +289,6 @@ const Feedback = ({ promiseId }) => {
        Sentiment: {item.sentiment}
       </p>
 
-      <p className="text-xs text-gray-400 mt-1">
-        {new Date(item.createdAt).toLocaleDateString()}
-      </p>
     </div>
 
     {/* ✅ RIGHT — ACTION BUTTONS (LIKE YOUR IMAGE) */}
