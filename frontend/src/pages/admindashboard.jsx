@@ -292,7 +292,7 @@ const AdminDashboard = () => {
   const handleUserFormChange = (field, value) => {
     setUserForm(prev => ({ ...prev, [field]: value }));
   };
-  const handleUserFormChange = (field, value) => { setUserForm(prev => ({ ...prev, [field]: value })); };
+  
 
   const handleUserSearch = async (event) => {
     event.preventDefault();
@@ -926,23 +926,36 @@ const AdminDashboard = () => {
         <div style={{ flex:1, overflowY:'auto', padding:'24px 28px' }}>
           
           {/* --- DYNAMIC RENDERING BLOCK --- */}
-          {isUsersPage ? (
-            renderUsersTable()
-           ) : isNewsPage ? (
-           renderNewsTable()
-          ) : isFeedbackPage ? (
-          renderFeedbackManagement()
-          ) : (
-          <>
+          {/* --- DYNAMIC RENDERING BLOCK --- */}
+{isUsersPage ? (
+  renderUsersTable()
+) : isNewsPage ? (
+  renderNewsTable()
+) : isFeedbackPage ? (
+  renderFeedbackManagement()
+) : isPromisesPage ? (
+  <PromisesManagement />
+) : (
+  <>
+    {/* Overview Dashboard */}
 
+    <div
+      ref={ref}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4,1fr)',
+        gap: 16,
+        marginBottom: 24,
+      }}
+    >
+      {STATS.map((s, i) => (
+        <StatCard key={i} stat={s} inView={inView} />
+      ))}
+    </div>
 
-          {/* Stat cards */}
-          ) : isNewsPage ? (
-            renderNewsTable()
-          ) : isPromisesPage ? (
-            <PromisesManagement /> // --- RENDERS YOUR SEPARATE COMPONENT HERE ---
-          ) : (
-          <>
+    {/* keep the rest of dashboard JSX BELOW as-is */}
+  </>
+)}
           {/* Overview Dashboard */}
           <div ref={ref} style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
             {STATS.map((s,i) => <StatCard key={i} stat={s} inView={inView} />)}
@@ -1106,8 +1119,8 @@ const AdminDashboard = () => {
               {dataError}
             </div>
           )}
-          </>
-          )}
+          
+          
 
         </div>
       </div>
