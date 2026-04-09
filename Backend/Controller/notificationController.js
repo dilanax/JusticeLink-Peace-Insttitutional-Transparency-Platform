@@ -11,29 +11,78 @@ import {
   getEmailLogs
 } from '../Utils/sendEmail.js';
 
+// ==================== VALIDATION HELPERS ====================
+const VALID_TYPES = ["general", "complaint_update", "emergency_alert"];
+const VALID_STATUSES = ['unread', 'read', 'archived', 'overdue'];
+const TITLE_MIN = 3;
+const TITLE_MAX = 120;
+const BODY_MIN = 10;
+const BODY_MAX = 500;
+
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
+function validateTitle(title) {
+  if (!title || typeof title !== 'string') return 'Title is required';
+  const trimmed = title.trim();
+  if (trimmed.length < TITLE_MIN) return `Title must be at least ${TITLE_MIN} characters`;
+  if (trimmed.length > TITLE_MAX) return `Title must not exceed ${TITLE_MAX} characters`;
+  return null;
+}
+
+function validateBody(body) {
+  if (!body || typeof body !== 'string') return 'Body is required';
+  const trimmed = body.trim();
+  if (trimmed.length < BODY_MIN) return `Body must be at least ${BODY_MIN} characters`;
+  if (trimmed.length > BODY_MAX) return `Body must not exceed ${BODY_MAX} characters`;
+  return null;
+}
+
+function validateType(type) {
+  if (!type) return 'Type is required';
+  if (!VALID_TYPES.includes(type)) return `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}`;
+  return null;
+}
+
+function sanitize(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>]/g, '').trim();
+}
+
 export async function createNotification(req, res) {
   try {
     const { title, body, type = "general", recipients, expiryDays = 7 } = req.body;
 
     // Validate required fields
-    if (!title || !body || !type) {
-      return res.status(400).json({ message: 'title, body, and type are required' });
+    const errors = {};
+    const titleErr = validateTitle(title);
+    if (titleErr) errors.title = titleErr;
+    const bodyErr = validateBody(body);
+    if (bodyErr) errors.body = bodyErr;
+    const typeErr = validateType(type);
+    if (typeErr) errors.type = typeErr;
+
+    // Validate expiryDays
+    if (expiryDays !== undefined && expiryDays !== null) {
+      const days = Number(expiryDays);
+      if (isNaN(days) || !Number.isInteger(days) || days < 1 || days > 365) {
+        errors.expiryDays = 'Expiry days must be a whole number between 1 and 365';
+      }
     }
 
-    // Validate notification type
-    const validTypes = ["general", "complaint_update", "emergency_alert"];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ message: `Invalid notification type. Must be one of: ${validTypes.join(', ')}` });
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: 'Validation failed', errors });
     }
 
     // Calculate expiry date
     const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + expiryDays);
+    expiryDate.setDate(expiryDate.getDate() + Number(expiryDays));
 
-    // Create notification
+    // Create notification with sanitized inputs
     const notification = new Notification({
-      title,
-      body,
+      title: sanitize(title),
+      body: sanitize(body),
       type,
       status: 'unread',
       deliveredTo: req.user?._id || null,
@@ -45,10 +94,32 @@ export async function createNotification(req, res) {
 
     await notification.save();
 
+    // Distribute notification to recipients at creation time so users can see it immediately.
+    let recipientUsers = [];
+    if (Array.isArray(recipients) && recipients.length > 0) {
+      const validRecipientIds = recipients.filter((id) => isValidObjectId(id));
+      recipientUsers = await User.find({ _id: { $in: validRecipientIds } }).select('_id');
+    } else {
+      recipientUsers = await User.find().select('_id');
+    }
+
+    if (recipientUsers.length > 0) {
+      const userNotificationOps = recipientUsers.map((recipient) => ({
+        updateOne: {
+          filter: { NIC: notification._id, user_id: recipient._id },
+          update: { $setOnInsert: { NIC: notification._id, user_id: recipient._id, readStatus: false } },
+          upsert: true
+        }
+      }));
+
+      await UserNotification.bulkWrite(userNotificationOps, { ordered: false });
+    }
+
     res.status(201).json({
       message: 'Notification created successfully',
       notificationId: notification._id,
-      notification: notification
+      notification: notification,
+      recipientCount: recipientUsers.length
     });
 
   } catch (error) {
@@ -65,6 +136,23 @@ export async function sendNotification(req, res) {
 
     if (!notificationId) {
       return res.status(400).json({ message: 'notificationId is required' });
+    }
+
+    if (!isValidObjectId(notificationId)) {
+      return res.status(400).json({ message: 'Invalid notification ID format' });
+    }
+
+    // Validate recipientUserIds if provided
+    if (recipientUserIds && Array.isArray(recipientUserIds)) {
+      const invalidIds = recipientUserIds.filter(id => !isValidObjectId(id));
+      if (invalidIds.length > 0) {
+        return res.status(400).json({ message: 'One or more recipient user IDs are invalid' });
+      }
+    }
+
+    // Validate sendToRole if provided
+    if (sendToRole && typeof sendToRole !== 'string') {
+      return res.status(400).json({ message: 'sendToRole must be a string' });
     }
 
     // Find the notification
@@ -97,14 +185,19 @@ export async function sendNotification(req, res) {
     // Send notifications based on user type and notification type
     for (const recipient of recipients) {
       try {
-        // Create UserNotification record
-        const userNotif = new UserNotification({
-          NIC: notification._id,
-          user_id: recipient._id,
-          readStatus: false,
-          readAt: null
-        });
-        await userNotif.save();
+        // Upsert to avoid duplicate inbox records when create + send are both called.
+        await UserNotification.updateOne(
+          { NIC: notification._id, user_id: recipient._id },
+          {
+            $setOnInsert: {
+              NIC: notification._id,
+              user_id: recipient._id,
+              readStatus: false,
+              readAt: null
+            }
+          },
+          { upsert: true }
+        );
         sentRecords.push(recipient._id);
 
         // Send different notifications based on user role and notification type
@@ -127,8 +220,8 @@ export async function sendNotification(req, res) {
       }
     }
 
-    // Update notification status
-    notification.status = 'read'; // Changed from sent to read
+    // Keep base notification unread for recipients until each user marks it read.
+    notification.status = 'unread';
     await notification.save();
 
     res.status(200).json({
@@ -154,18 +247,24 @@ async function sendNotificationByUserType(user, notification) {
     }
 
     // Send different email templates based on notification type
-    if (notification.type === 'emergency_alert') {
-      await sendAlertEmail(user.email, {
-        title: notification.title,
-        body: notification.body
-      });
-    } else {
-      await sendNotificationEmail(user.email, notification, user.name);
-    }
+    try {
+      if (notification.type === 'emergency_alert') {
+        await sendAlertEmail(user.email, {
+          title: notification.title,
+          body: notification.body
+        });
+      } else {
+        await sendNotificationEmail(user.email, notification, user.name);
+      }
 
-    console.log(`✅ Email notification sent to ${user.email} (${user.role})`);
+      console.log(`✅ Email notification sent to ${user.email} (${user.role})`);
+    } catch (emailError) {
+      console.warn(`⚠️ Email sending failed for ${user.email}, but notification still created:`, emailError.message);
+      // Log email failure but continue - don't throw
+    }
   } catch (error) {
-    console.error(`❌ Error sending notification to user ${user._id}:`, error.message);
+    console.error(`❌ Error in sendNotificationByUserType for user ${user._id}:`, error.message);
+    throw error;
   }
 }
 
@@ -242,13 +341,16 @@ export async function updateNotificationStatus(req, res) {
     const { notificationId } = req.params;
     const { status } = req.body;
 
+    if (!notificationId || !isValidObjectId(notificationId)) {
+      return res.status(400).json({ message: 'A valid notification ID is required' });
+    }
+
     if (!status) {
       return res.status(400).json({ message: 'status is required' });
     }
 
-    const validStatuses = ['unread', 'read', 'archived', 'overdue'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
     }
 
     const notification = await Notification.findByIdAndUpdate(
@@ -279,6 +381,10 @@ export async function updateNotificationStatus(req, res) {
 export async function markAsExpired(req, res) {
   try {
     const { notificationId } = req.params;
+
+    if (!notificationId || !isValidObjectId(notificationId)) {
+      return res.status(400).json({ message: 'A valid notification ID is required' });
+    }
 
     const notification = await Notification.findByIdAndUpdate(
       notificationId,
@@ -336,6 +442,10 @@ export async function markAsDeleted(req, res) {
   try {
     const { notificationId } = req.params;
 
+    if (!notificationId || !isValidObjectId(notificationId)) {
+      return res.status(400).json({ message: 'A valid notification ID is required' });
+    }
+
     const notification = await Notification.findByIdAndUpdate(
       notificationId,
       { 
@@ -378,7 +488,30 @@ export async function getMyNotifications(req, res) {
         ? new mongoose.Types.ObjectId(req.user._id)
         : req.user._id;
 
-    const rows = await UserNotification.aggregate([
+    // For admin users, return all notifications for management purposes
+    if (req.user.role === 'admin') {
+      const allNotifications = await Notification.find()
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const data = allNotifications.map(notif => ({
+        _id: notif._id,
+        id: notif._id,
+        notificationId: notif._id,
+        title: notif.title,
+        body: notif.body,
+        message: notif.body,
+        type: notif.type,
+        status: notif.status,
+        createdAt: notif.createdAt || notif.sendDate,
+        sendDate: notif.sendDate
+      }));
+
+      return res.json(data);
+    }
+
+    // For regular users, get their personal notifications
+    let rows = await UserNotification.aggregate([
       { $match: { user_id: userId } },
       {
         $lookup: {
@@ -405,13 +538,66 @@ export async function getMyNotifications(req, res) {
       { $sort: { createdAt: -1 } }
     ]);
 
+    // Backfill legacy/global notifications for users that don't yet have link rows.
+    if (rows.length === 0) {
+      const globalNotifications = await Notification.find({ status: { $ne: 'archived' } })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (globalNotifications.length > 0) {
+        try {
+          const backfillOps = globalNotifications.map((notif) => ({
+            updateOne: {
+              filter: { NIC: notif._id, user_id: userId },
+              update: { $setOnInsert: { NIC: notif._id, user_id: userId, readStatus: false } },
+              upsert: true
+            }
+          }));
+
+          await UserNotification.bulkWrite(backfillOps, { ordered: false });
+
+          rows = await UserNotification.aggregate([
+            { $match: { user_id: userId } },
+            {
+              $lookup: {
+                from: 'notifications',
+                localField: 'NIC',
+                foreignField: '_id',
+                as: 'notification'
+              }
+            },
+            { $unwind: '$notification' },
+            {
+              $project: {
+                _id: 1,
+                readStatus: 1,
+                createdAt: 1,
+                'notification._id': 1,
+                'notification.title': 1,
+                'notification.body': 1,
+                'notification.type': 1,
+                'notification.status': 1,
+                'notification.sendDate': 1
+              }
+            },
+            { $sort: { createdAt: -1 } }
+          ]);
+        } catch (backfillError) {
+          console.warn('getMyNotifications backfill warning:', backfillError.message);
+        }
+      }
+    }
+
     const data = rows.map(r => ({
-      id: r._id,               
+      _id: r.notification._id,
+      id: r._id,
+      userNotificationId: r._id,
       notificationId: r.notification._id,
       title: r.notification.title,
       body: r.notification.body,
+      message: r.notification.body,
       type: r.notification.type,
-      status: r.notification.status,
+      status: r.readStatus ? 'read' : 'unread',
       createdAt: r.notification.sendDate || r.createdAt,
       isRead: r.readStatus
     }));
@@ -469,12 +655,14 @@ export async function getNotificationsByType(req, res) {
     ]);
 
     const data = rows.map(r => ({
-      id: r._id,               
+      _id: r.notification._id,
+      id: r._id,
+      userNotificationId: r._id,
       notificationId: r.notification._id,
       title: r.notification.title,
       body: r.notification.body,
       type: r.notification.type,
-      status: r.notification.status,
+      status: r.readStatus ? 'read' : 'unread',
       createdAt: r.notification.sendDate || r.createdAt,
       isRead: r.readStatus
     }));
@@ -489,15 +677,24 @@ export async function getNotificationsByType(req, res) {
 export async function createPromotionalNotification(req, res) {
   try {
     const { title, body, recipientRole = "all", notificationType = "general" } = req.body;
-    if (!title || !body) {
-      return res.status(400).json({ message: "Please provide title and body." });
+
+    const errors = {};
+    const titleErr = validateTitle(title);
+    if (titleErr) errors.title = titleErr;
+    const bodyErr = validateBody(body);
+    if (bodyErr) errors.body = bodyErr;
+    const typeErr = validateType(notificationType);
+    if (typeErr) errors.type = typeErr;
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: 'Validation failed', errors });
     }
 
     const adminName = req.user?.name || req.user?.username || 'Admin';
 
     const notification = new Notification({
-      title,
-      body,
+      title: sanitize(title),
+      body: sanitize(body),
       type: notificationType,
       status: "unread",
       deliveredTo: null,
@@ -561,13 +758,22 @@ export async function createPromotionalNotification(req, res) {
 export async function createNotificationForUser(req, res) {
   try {
     const { title, body, type, userId } = req.body;
-    if (!title || !body || !userId || !type) {
-      return res.status(400).json({ message: 'title, body, userId, and type are required' });
+
+    const errors = {};
+    const titleErr = validateTitle(title);
+    if (titleErr) errors.title = titleErr;
+    const bodyErr = validateBody(body);
+    if (bodyErr) errors.body = bodyErr;
+    const typeErr = validateType(type);
+    if (typeErr) errors.type = typeErr;
+    if (!userId) {
+      errors.userId = 'userId is required';
+    } else if (!isValidObjectId(userId)) {
+      errors.userId = 'Invalid userId format';
     }
 
-    const validTypes = ["general", "complaint_update", "emergency_alert"];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ message: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: 'Validation failed', errors });
     }
 
     const user = await User.findById(userId);
@@ -576,8 +782,8 @@ export async function createNotificationForUser(req, res) {
     }
 
     const notification = new Notification({
-      title,
-      body,
+      title: sanitize(title),
+      body: sanitize(body),
       type,
       status: 'unread',
       deliveredTo: userId,
@@ -627,30 +833,93 @@ export async function createNotificationForUser(req, res) {
 
 
 export async function updateNotification(req, res) {
-  const id = req.params.id;
+  try {
+    const id = req.params.id;
+    const { title, body, type } = req.body;
 
-  Notification.findOneAndUpdate(
-    { $or: [{ _id: id }, { notificationID: id }] }, 
-    { ...req.body, updatedAt: new Date() },
-    { new: true }
-  )
-    .then((notifi) => {
-      if (!notifi) {
-        return res.status(404).json({ message: "Notification not found" });
-      }
-      res.json({ message: "Notification Updated Successfully", notification: notifi });
-    })
-    .catch((err) => {
-      console.error("Notification update failed:", err);
-      res.status(500).json({ message: "Notification update failed" });
+    if (!id || !isValidObjectId(id)) {
+      return res.status(400).json({ message: 'A valid notification ID is required' });
+    }
+
+    // Validate input
+    const errors = {};
+    const titleErr = validateTitle(title);
+    if (titleErr) errors.title = titleErr;
+    const bodyErr = validateBody(body);
+    if (bodyErr) errors.body = bodyErr;
+    if (type) {
+      const typeErr = validateType(type);
+      if (typeErr) errors.type = typeErr;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({ message: 'Validation failed', errors });
+    }
+
+    // Update the notification
+    const updateData = {
+      title: sanitize(title).trim(),
+      body: sanitize(body).trim(),
+      updatedAt: new Date()
+    };
+
+    if (type) {
+      updateData.type = type;
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    res.json({ 
+      message: "Notification updated successfully", 
+      notification: notification 
     });
+  } catch (error) {
+    console.error("Notification update failed:", error);
+    res.status(500).json({ 
+      message: "Notification update failed", 
+      error: error.message 
+    });
+  }
 }
 
 
-export function deleteNotification(req, res) {
-  Notification.findOneAndDelete({ _id: req.params.id })
-    .then(() => res.json({ message: 'Notification was Deleted' }))
-    .catch(() => res.status(500).json({ message: 'Notification deletion failed' }));
+export async function deleteNotification(req, res) {
+  try {
+    const id = req.params.id;
+
+    if (!id || !isValidObjectId(id)) {
+      return res.status(400).json({ message: 'A valid notification ID is required' });
+    }
+
+    // Delete the notification
+    const notification = await Notification.findByIdAndDelete(id);
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    // Also delete associated user notifications
+    await UserNotification.deleteMany({ NIC: id });
+
+    res.json({ 
+      message: 'Notification deleted successfully',
+      notificationId: id
+    });
+  } catch (error) {
+    console.error("Notification deletion failed:", error);
+    res.status(500).json({ 
+      message: "Notification deletion failed", 
+      error: error.message 
+    });
+  }
 }
 
 
@@ -664,9 +933,43 @@ export async function markAsRead(req, res) {
         : req.user._id;
 
     const { notificationId } = req.params;
+    const isAdmin = req.user.role === 'admin';
 
+    // For admin users marking all as read
+    if (!notificationId && isAdmin) {
+      const result = await Notification.updateMany(
+        { status: { $ne: 'read' } },
+        { $set: { status: 'read', updatedAt: new Date() } }
+      );
+      
+      return res.json({ 
+        success: true, 
+        modified: result.modifiedCount || 0,
+        message: 'All notifications marked as read'
+      });
+    }
+
+    // For admin marking a specific notification as read
+    if (notificationId && isAdmin) {
+      const result = await Notification.findByIdAndUpdate(
+        notificationId,
+        { $set: { status: 'read', updatedAt: new Date() } },
+        { new: true }
+      );
+      
+      if (!result) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+      
+      return res.json({ 
+        success: true,
+        message: 'Notification marked as read',
+        notification: result
+      });
+    }
+
+    // For regular users - specific notification
     if (notificationId) {
-      // Mark specific notification as read
       const result = await UserNotification.updateOne(
         { user_id: userId, NIC: notificationId },
         { $set: { readStatus: true, readAt: new Date() } }
@@ -678,7 +981,7 @@ export async function markAsRead(req, res) {
         message: 'Notification marked as read'
       });
     } else {
-      // Mark all notifications as read
+      // For regular users - mark all as read
       const result = await UserNotification.updateMany(
         { user_id: userId, readStatus: false },
         { $set: { readStatus: true, readAt: new Date() } }
@@ -692,7 +995,7 @@ export async function markAsRead(req, res) {
     }
   } catch (error) {
     console.error('markAsRead error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 }
 
@@ -773,53 +1076,91 @@ export async function getNotificationStats(req, res) {
         ? new mongoose.Types.ObjectId(req.user._id)
         : req.user._id;
 
+    const isAdmin = req.user.role === 'admin';
+
+    // For admin users, count all notifications
+    if (isAdmin) {
+      const totalCount = await Notification.countDocuments();
+      const unreadCount = await Notification.countDocuments({ status: 'unread' });
+      const readCount = await Notification.countDocuments({ status: 'read' });
+      const archivedCount = await Notification.countDocuments({ status: 'archived' });
+      const overdueCount = await Notification.countDocuments({ status: 'overdue' });
+
+      const typeStats = await Notification.aggregate([
+        {
+          $group: {
+            _id: '$type',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      const statusStats = await Notification.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      return res.json({
+        total: totalCount,
+        unread: unreadCount,
+        read: readCount,
+        archived: archivedCount,
+        overdue: overdueCount,
+        byType: typeStats,
+        byStatus: statusStats
+      });
+    }
+
+    // For regular users, count their personal notifications
     const totalCount = await UserNotification.countDocuments({ user_id: userId });
     const unreadCount = await UserNotification.countDocuments({ user_id: userId, readStatus: false });
     const readCount = await UserNotification.countDocuments({ user_id: userId, readStatus: true });
 
-    const typeStats = await Notification.aggregate([
-      {
-        $lookup: {
-          from: 'usernotifications',
-          localField: '_id',
-          foreignField: 'NIC',
-          as: 'userNotifications'
-        }
-      },
-      {
-        $match: {
-          'userNotifications.user_id': userId
-        }
-      },
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    let typeStats = [];
+    let statusStats = [];
 
-    const statusStats = await Notification.aggregate([
-      {
-        $lookup: {
-          from: 'usernotifications',
-          localField: '_id',
-          foreignField: 'NIC',
-          as: 'userNotifications'
+    try {
+      typeStats = await UserNotification.aggregate([
+        { $match: { user_id: userId } },
+        {
+          $lookup: {
+            from: 'notifications',
+            localField: 'NIC',
+            foreignField: '_id',
+            as: 'notification'
+          }
+        },
+        { $unwind: '$notification' },
+        {
+          $group: {
+            _id: '$notification.type',
+            count: { $sum: 1 }
+          }
         }
-      },
-      {
-        $match: {
-          'userNotifications.user_id': userId
+      ]);
+    } catch (aggregateError) {
+      console.warn('getNotificationStats type aggregation failed:', aggregateError.message);
+    }
+
+    try {
+      statusStats = await UserNotification.aggregate([
+        { $match: { user_id: userId } },
+        {
+          $group: {
+            _id: {
+              $cond: [{ $eq: ['$readStatus', true] }, 'read', 'unread']
+            },
+            count: { $sum: 1 }
+          }
         }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+      ]);
+    } catch (aggregateError) {
+      console.warn('getNotificationStats status aggregation failed:', aggregateError.message);
+    }
 
     res.json({
       total: totalCount,
