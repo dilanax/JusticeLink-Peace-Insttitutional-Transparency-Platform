@@ -1,194 +1,400 @@
 
 # JusticeLink Platform
 
-A full-stack web application for tracking political promises, parliamentary attendance, and news for transparency and accountability in Sri Lanka.
-
----
+JusticeLink is a full-stack civic transparency platform for tracking political promises, parliamentary activity, public feedback, and related news.
 
 ## Table of Contents
 - [Overview](#overview)
-- [Features](#features)
+- [Core Features](#core-features)
 - [Architecture](#architecture)
-- [Technologies Used](#technologies-used)
-- [Folder Structure](#folder-structure)
-- [Backend API](#backend-api)
-- [Frontend Overview](#frontend-overview)
-- [Setup & Installation](#setup--installation)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Setup Instructions](#setup-instructions)
+- [Deployment](#deployment)
+- [API Endpoint Documentation](#api-endpoint-documentation)
+- [Testing Instructions Report](#testing-instructions-report)
+- [Evidence Folders](#evidence-folders)
+- [Third-Party API Integration](#third-party-api-integration)
+- [Evaluation Criteria Checklist](#evaluation-criteria-checklist)
+- [Submission Guidelines Checklist](#submission-guidelines-checklist)
+- [Evaluation Dates](#evaluation-dates)
 
----
+## Quick Links
+- [Deployment Report](Deployment-Report.md)
+- [Testing Instructions Report](Testing-Instructions-Report.md)
+- [Deployment Evidence Folder](docs/deployment/)
+- [Testing Evidence Folder](docs/testing/)
 
 ## Overview
-JusticeLink is a platform designed to:
-- Track and verify political promises made by politicians.
-- Monitor parliamentary attendance and session participation.
-- Aggregate and display political news.
-- Enable citizen feedback and evidence submission.
-- Provide notifications and alerts to users.
+The platform is designed to:
+- Track campaign and parliamentary promises.
+- Monitor attendance and session participation.
+- Collect and moderate citizen feedback.
+- Publish political news and related trends.
+- Deliver user notifications and alerts.
 
----
-
-## Features
-- **User Authentication:** Registration, login, OTP verification, and role-based access (citizen, admin, auditor).
-- **Promise Tracking:** CRUD operations for promises, status updates, evidence linking, and statistics.
-- **Attendance Monitoring:** Record and compare attendance for politicians in parliamentary sessions.
-- **News Aggregation:** Fetch and display political news, link news to promises.
-- **Feedback System:** Citizens can submit feedback and evidence on promises, with voting and sentiment analysis.
-- **Notifications:** Real-time and scheduled notifications for users, including OTP and email logs.
-- **Admin Dashboard:** Manage users, politicians, sessions, and system data.
-
----
+## Core Features
+- User registration/login with JWT-based authentication.
+- Role-based access control for citizen/admin flows.
+- Promise management with status tracking.
+- Attendance and session monitoring.
+- Feedback and voting workflows.
+- Notification management and read-status tracking.
+- Admin-facing dashboards for moderation.
 
 ## Architecture
-- **Backend:** Node.js, Express, MongoDB (Mongoose), JWT authentication, RESTful API.
-- **Frontend:** React (Vite), React Router, Context API for auth, Axios for API calls, Tailwind CSS for styling.
+- Backend: Express.js REST API with MongoDB (Mongoose).
+- Frontend: React + Vite SPA.
+- Auth: JWT bearer tokens.
 
----
+## Tech Stack
+- Backend: `express`, `mongoose`, `jsonwebtoken`, `dotenv`, `nodemailer`, `swagger-jsdoc`, `swagger-ui-express`
+- Frontend: `react`, `react-router-dom`, `axios`, `vite`, `tailwindcss`
 
-## Technologies Used
-- **Backend:**
-    - express, mongoose, dotenv, cors, bcryptjs, jsonwebtoken, nodemailer, socket.io, stripe, swagger-jsdoc, swagger-ui-express
-- **Frontend:**
-    - react, react-dom, react-router-dom, axios, tailwindcss, vite
-
----
-
-## Folder Structure
-```
+## Project Structure
+```text
 Backend/
-    Controller/        # API controllers (user, news, promises, etc.)
-    Middleware/        # Auth and role middleware
-    Model/             # Mongoose models (User, Promise, News, etc.)
-    Routes/            # Express route definitions
-    Utils/             # Utility functions (ID generator, email)
-    Logs/              # Email and OTP logs
-    index.js           # Main server entry point
-    package.json       # Backend dependencies
-Frontend/Frontend/
-    src/
-        components/      # Navbar, NotificationDropdown, etc.
-        context/         # AuthContext for global state
-        pages/           # Home, Dashboard, Login, Register, News, OTP, etc.
-        services/        # API service (axios)
-        styles/          # CSS files
-    public/            # Static assets
-    index.html         # Main HTML
-    package.json       # Frontend dependencies
+  Controller/
+  Middleware/
+  Model/
+  Routes/
+  Utils/
+  Logs/
+  index.js
+  package.json
+
+frontend/
+  public/
+  src/
+     components/
+     pages/
+     App.jsx
+     index.jsx
+  package.json
+
+README.md
 ```
 
----
-
-## Backend API
-### User Routes
-- `POST /api/users/register` — Register a new user
-- `POST /api/users/login` — Login
-- `POST /api/users/send-otp` — Send OTP to email
-- `POST /api/users/verify-otp` — Verify OTP
-- `GET /api/users/` — List users (admin)
-- `PUT /api/users/:id` — Update user (admin)
-- `DELETE /api/users/:id` — Delete user (admin)
-
-### Promise Routes
-- `GET /api/promises/` — List all promises
-- `GET /api/promises/:id` — Get promise by ID
-- `POST /api/promises/` — Create promise (admin)
-- `PUT /api/promises/:id` — Update promise (admin)
-- `DELETE /api/promises/:id` — Delete promise (admin)
-- `PATCH /api/promises/:id/status` — Update status (admin/auditor)
-- `GET /api/promises/:id/search-evidence` — Search for evidence (admin/auditor)
-- `GET /api/promises/stats/:politicianId` — Stats by politician
-
-### Attendance Routes
-- `GET /api/attendance/attendance/:politicianId` — Get attendance by politician
-- `POST /api/attendance/attendance/record` — Record attendance
-- `GET /api/attendance/attendance/stats/compare` — Compare attendance
-- `PUT /api/attendance/attendance/:recordId` — Update attendance
-- `GET /api/attendance/parliament/sessions` — List sessions
-
-### News Routes
-- `GET /api/news/social/trends` — Get political trends
-- `GET /api/news/archive/:id` — Get archived news (admin)
-- `POST /api/news/verify/:id` — Verify news for promise (admin)
-- `DELETE /api/news/link/:id` — Remove linked news (admin)
-- `PUT /api/news/update/:id` — Update linked news (admin)
-
-### Feedback Routes
-- `POST /api/feedback/:promiseId` — Create feedback
-- `GET /api/feedback/:promiseId` — Get feedback for promise
-- `POST /api/feedback/:feedbackId/vote` — Vote on feedback
-- `PATCH /api/feedback/:id` — Update feedback
-- `DELETE /api/feedback/:id` — Delete feedback
-
-### Notification Routes
-- `GET /api/notifications/` — View all notifications (admin)
-- `GET /api/notifications/my` — My notifications
-- `GET /api/notifications/stats` — Notification stats
-- `GET /api/notifications/filter` — Filter notifications
-- `GET /api/notifications/type/:type` — By type
-- `PATCH /api/notifications/read/:notificationId` — Mark as read
-- `POST /api/notifications/` — Create notification (admin)
-- `POST /api/notifications/send` — Send notification (admin)
-- `POST /api/notifications/promotional` — Promotional notification (admin)
-
-### Session Routes
-- `POST /api/sessions/` — Create session
-- `GET /api/sessions/` — List sessions
-- `GET /api/sessions/:id` — Get session by ID
-- `PUT /api/sessions/:id` — Update session
-- `DELETE /api/sessions/:id` — Delete session
-
----
-
-## Frontend Overview
-- **Authentication:** Registration, login, OTP request/verify, context-based auth state.
-- **Dashboard:** User/admin dashboard with protected routes.
-- **News Page:** Fetches and displays political news.
-- **Promise & Feedback:** View promises, submit feedback, vote, and see sentiment.
-- **Notifications:** Dropdown for user notifications.
-- **Responsive UI:** Built with Tailwind CSS and React components.
-
----
-
-## Setup & Installation
+## Setup Instructions
 
 ### Prerequisites
-- Node.js (v18+ recommended)
-- MongoDB instance (local or cloud)
+- Node.js 18+
+- npm 9+
+- MongoDB Atlas or local MongoDB instance
 
-### Backend
-1. `cd Backend`
-2. `npm install`
-3. Create a `.env` file with:
-     - `PORT=5000`
-     - `MONGO_URI=your_mongodb_uri`
-     - `JWT_SECRET=your_jwt_secret`
-     - `SMTP_USER=your_email`
-     - `SMTP_PASSWORD=your_email_password`
-     - `NEWS_API_KEY=your_gnews_api_key`
-4. `npm run dev` (or `npm start`)
+### Backend Setup
+1. Open terminal in `Backend`.
+2. Install dependencies:
+    ```bash
+    npm install
+    ```
+3. Create `Backend/.env` with the required variables listed in [Environment Variables](#environment-variables).
+4. Run backend:
+    ```bash
+    npm run dev
+    ```
+5. Backend default local URL: `http://localhost:5000`
 
-### Frontend
-1. `cd Frontend/Frontend`
-2. `npm install`
-3. `npm run dev`
+### Frontend Setup
+1. Open terminal in `frontend`.
+2. Install dependencies:
+    ```bash
+    npm install
+    ```
+3. Create `frontend/.env` and set:
+    ```env
+    VITE_API_URL=http://localhost:5000
+    ```
+4. Run frontend:
+    ```bash
+    npm run dev
+    ```
+5. Frontend default local URL: `http://localhost:5173`
 
----
+## Deployment
 
-## Usage
-- Visit `http://localhost:5173` for the frontend.
-- Backend runs on `http://localhost:5000`.
-- Register as a user, login, and explore features.
-- Admin users can manage data and view dashboards.
+### Live URLs
+- Deployed backend API: https://janaya360-web-development-project.onrender.com
+- Deployed frontend application: https://janaya360-web-development-project.vercel.app/
 
----
+### Backend Deployment Platform and Setup Steps (Render)
+1. Push backend code to GitHub.
+2. In Render, create a new Web Service from the repository.
+3. Set root directory to `Backend`.
+4. Build command:
+    ```bash
+    npm install
+    ```
+5. Start command:
+    ```bash
+    npm start
+    ```
+6. Add environment variables from [Environment Variables](#environment-variables) in Render dashboard.
+7. Deploy and verify health by opening:
+    - `https://janaya360-web-development-project.onrender.com`
 
-## Contributing
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+### Frontend Deployment Platform and Setup Steps (Vercel)
+1. Push frontend code to GitHub.
+2. In Vercel, import the same repository.
+3. Set project root directory to `frontend`.
+4. Build command:
+    ```bash
+    npm run build
+    ```
+5. Output directory: `dist`
+6. Add frontend environment variable:
+    - `VITE_API_URL=https://janaya360-web-development-project.onrender.com`
+7. Deploy and verify by opening:
+    - `https://janaya360-web-development-project.vercel.app/`
 
----
+### Environment Variables
+Secrets are not exposed in this repository. Use secure platform dashboards (Render/Vercel) to configure them.
 
-## License
-[MIT](LICENSE)
+#### Backend (`Backend/.env`)
+- `PORT` - server port (example: `5000`)
+- `MONGO_URI` - MongoDB connection string
+- `JWT_SECRET` - JWT signing secret
+- `FRONTEND_URL` - frontend URL for CORS/email links
+- `NEWS_API_KEY` - news provider API key
+- `SMTP_HOST` - SMTP host
+- `SMTP_PORT` - SMTP port
+- `SMTP_USER` - SMTP username/email
+- `SMTP_PASSWORD` - SMTP password/app password
+- `EMAIL_USER` - sender email (if used by utility module)
+- `EMAIL_PASS` - sender password/app password (if used by utility module)
+
+#### Frontend (`frontend/.env`)
+- `VITE_API_URL` - base URL of backend API
+
+### Deployment Evidence (Screenshots)
+Add screenshots to clearly prove successful deployment.
+
+Minimum recommended evidence:
+1. Render dashboard showing successful backend deployment status.
+2. Browser tab showing live backend URL responding.
+3. Vercel dashboard showing successful frontend deployment status.
+4. Browser tab showing live frontend application running.
+
+Suggested path for storing evidence:
+- [docs/deployment/](docs/deployment/)
+
+Backend evidence locations:
+1. [docs/deployment/backend-render-overview.png](docs/deployment/backend-render-overview.png)
+2. [docs/deployment/backend-live-url-response.png](docs/deployment/backend-live-url-response.png)
+
+Frontend evidence locations:
+1. [docs/deployment/frontend-vercel-overview.png](docs/deployment/frontend-vercel-overview.png)
+2. [docs/deployment/frontend-live-url-view.png](docs/deployment/frontend-live-url-view.png)
+
+## API Endpoint Documentation
+
+### Base URL
+- Production: `https://janaya360-web-development-project.onrender.com`
+- Local: `http://localhost:5000`
+
+### Authentication
+- Scheme: `Bearer <JWT_TOKEN>`
+- Header:
+  ```http
+  Authorization: Bearer <token>
+  ```
+
+### Request/Response Format
+- Request body: JSON (`Content-Type: application/json`)
+- Successful responses: JSON object/array with resource data
+- Error responses: JSON with error message and HTTP status code
+
+### Endpoint Groups
+
+#### Users
+- `POST /api/users/register`
+- `POST /api/users/login`
+- `POST /api/users/send-otp`
+- `POST /api/users/verify-otp`
+- `GET /api/users` (auth/admin)
+- `GET /api/users/me` (auth)
+- `PUT /api/users/:id` (auth/admin)
+- `DELETE /api/users/:id` (auth/admin)
+
+#### Promises
+- `GET /api/promises`
+- `GET /api/promises/:id`
+- `POST /api/promises` (auth/admin)
+- `PUT /api/promises/:id` (auth/admin)
+- `DELETE /api/promises/:id` (auth/admin)
+- `PATCH /api/promises/:id/status` (auth/admin)
+- `GET /api/promises/stats/:politicianId`
+
+#### Politicians
+- `GET /api/politicians`
+- `POST /api/politicians` (auth/admin)
+- `PUT /api/politicians/:id` (auth/admin)
+- `DELETE /api/politicians/:id` (auth/admin)
+
+#### Attendance and Sessions
+- `GET /api/attendance/attendance/:politicianId`
+- `POST /api/attendance/attendance/record`
+- `GET /api/attendance/attendance/stats/compare`
+- `PUT /api/attendance/attendance/:recordId`
+- `GET /api/attendance/parliament/sessions`
+- `POST /api/sessions`
+- `GET /api/sessions`
+- `GET /api/sessions/:id`
+- `PUT /api/sessions/:id`
+- `DELETE /api/sessions/:id`
+
+#### News
+- `GET /api/news/public`
+- `GET /api/news/social/trends`
+- `GET /api/news/archive/:id` (auth/admin)
+- `POST /api/news/verify/:id` (auth/admin)
+- `PUT /api/news/update/:id` (auth/admin)
+- `DELETE /api/news/link/:id` (auth/admin)
+
+#### Feedback
+- `POST /api/feedback/:promiseId`
+- `GET /api/feedback/:promiseId`
+- `POST /api/feedback/:feedbackId/vote`
+- `PATCH /api/feedback/:id`
+- `DELETE /api/feedback/:id`
+
+#### Notifications
+- `GET /api/notifications` (auth/admin)
+- `GET /api/notifications/my` (auth)
+- `GET /api/notifications/stats` (auth)
+- `GET /api/notifications/filter` (auth)
+- `GET /api/notifications/type/:type` (auth)
+- `PATCH /api/notifications/read/:notificationId` (auth)
+- `POST /api/notifications` (auth/admin)
+- `POST /api/notifications/send` (auth/admin)
+- `POST /api/notifications/promotional` (auth/admin)
+
+### Example Request and Response
+
+Example: Login
+
+```http
+POST /api/users/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "your_password"
+}
+```
+
+```json
+{
+  "success": true,
+  "token": "<jwt-token>",
+  "user": {
+     "_id": "...",
+     "name": "Sample User",
+     "email": "user@example.com",
+     "role": "citizen"
+  }
+}
+```
+
+## Testing Instructions Report
+
+### 1. Unit Testing
+Current status:
+- Backend has a Jest test command in `Backend/package.json`.
+- Frontend includes one test file: `frontend/src/App.test.js`.
+
+Run commands:
+```bash
+# backend
+cd Backend
+npm test
+```
+
+Recommended additions to satisfy grading rubric:
+1. Add unit tests for controller helper logic and middleware behavior.
+2. Mock database and external APIs for isolated tests.
+3. Include pass/fail screenshots in [docs/testing/](docs/testing/).
+
+### 2. Integration Testing
+Scope:
+- Validate interactions between routes, controllers, middleware, and MongoDB.
+- Validate success and error scenarios for each major endpoint.
+
+Setup and execution:
+1. Start backend with test-safe environment variables.
+2. Use Postman collection to run endpoint flows.
+3. Validate status codes, response body shape, and DB side effects.
+
+Recommended report items:
+1. Tested endpoint list with expected vs actual outcomes.
+2. Evidence screenshots from Postman runner.
+3. Notes for unauthorized, invalid payload, and not-found scenarios.
+
+### 3. Performance Testing
+Tool suggestion: Artillery.
+
+Setup:
+```bash
+npm install -g artillery
+```
+
+Example quick test command:
+```bash
+artillery quick --count 20 --num 10 https://janaya360-web-development-project.onrender.com/api/promises
+```
+
+Report requirements:
+1. Test scenario and load profile.
+2. Throughput and latency summary.
+3. Error rate and bottleneck observations.
+
+### Testing Environment Configuration Details
+- Backend: Node.js + Express.js
+- Database: MongoDB Atlas
+- API Tooling: Postman
+- Performance Tooling: Artillery
+- Frontend: React + Vite
+
+## Evidence Folders
+- Deployment evidence: [docs/deployment/](docs/deployment/)
+- Testing evidence: [docs/testing/](docs/testing/)
+
+## Third-Party API Integration
+- News API integration for social/political trend data.
+- SMTP/email integration for OTP and notifications.
+- External integrations in chatbot/notification workflows.
+
+## Evaluation Criteria Checklist
+- Correctness and overall functionality.
+- Creativity and UI/UX implementation quality.
+- Code readability and best practices.
+- Documentation completeness.
+- Git workflow quality with meaningful commit history.
+- Testing depth and quality.
+- Viva performance.
+
+## Submission Guidelines Checklist
+
+### 1. Source Code Submission
+- Submit complete source via GitHub.
+- Keep clean and meaningful commit history.
+- Avoid late changes after the deadline window.
+
+### 2. Documentation Submission
+Include:
+1. This README with setup and API endpoint details.
+2. [Deployment-Report.md](Deployment-Report.md).
+3. [Testing-Instructions-Report.md](Testing-Instructions-Report.md) with:
+    - How to run unit tests
+    - Integration testing setup and execution
+    - Performance testing setup and execution
+    - Testing environment configuration
+
+### 3. Deployment Report
+The deployment section above includes required platform details, setup steps, environment variable handling, live URLs, and evidence checklist.
+The standalone report is available in [Deployment-Report.md](Deployment-Report.md).
+
+## Evaluation Dates
+- Evaluation 01: 27 February 2026
+- Evaluation 02: 12 April 2026 (fixed deadline)
 
