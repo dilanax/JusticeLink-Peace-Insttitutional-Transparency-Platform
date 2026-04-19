@@ -34,6 +34,21 @@ const mapGoogleRssToArticles = (xml) => {
   }));
 };
 
+const mapGdeltArticles = (data) => {
+  const list = Array.isArray(data?.articles) ? data.articles : [];
+  return list.slice(0, 12).map((item, index) => ({
+    title: item.title || `Political update ${index + 1}`,
+    description: item.seendate ? `Reported on ${item.seendate}` : "Live political update.",
+    content: "",
+    url: item.url || "",
+    image: "",
+    publishedAt: item.seendate || "",
+    source: {
+      name: item.sourcecountry || "GDELT",
+    },
+  }));
+};
+
 // ===============================
 // GET ALL NEWS (ADMIN)
 // ===============================
@@ -149,16 +164,56 @@ export const getPoliticalTrends = async (req, res) => {
     }
 
     // Fallback live feed (no API key required)
-    const rssResponse = await axios.get(
-      "https://news.google.com/rss/search?q=Sri+Lanka+politics&hl=en-US&gl=US&ceid=US:en",
-      { timeout: 8000 }
-    );
+    try {
+      const rssResponse = await axios.get(
+        "https://news.google.com/rss/search?q=Sri+Lanka+politics&hl=en-US&gl=US&ceid=US:en",
+        { timeout: 20000 }
+      );
+      const fallbackArticles = mapGoogleRssToArticles(rssResponse.data);
+      if (fallbackArticles.length > 0) {
+        return res.json({
+          source: "google-rss-fallback",
+          totalArticles: fallbackArticles.length,
+          articles: fallbackArticles,
+        });
+      }
+    } catch (rssError) {
+      console.log("GOOGLE RSS FALLBACK ERROR:", rssError.response?.data || rssError.message);
+    }
 
-    const fallbackArticles = mapGoogleRssToArticles(rssResponse.data);
-    return res.json({
-      source: "google-rss-fallback",
-      totalArticles: fallbackArticles.length,
-      articles: fallbackArticles,
+    // Second fallback (no API key required): GDELT
+    try {
+      const gdeltRes = await axios.get(
+        "https://api.gdeltproject.org/api/v2/doc/doc",
+        {
+          params: {
+            query: "Sri Lanka politics",
+            mode: "ArtList",
+            maxrecords: 20,
+            format: "json",
+            sort: "datedesc",
+          },
+          timeout: 15000,
+        }
+      );
+      const gdeltArticles = mapGdeltArticles(gdeltRes.data);
+      if (gdeltArticles.length > 0) {
+        return res.json({
+          source: "gdelt-fallback",
+          totalArticles: gdeltArticles.length,
+          articles: gdeltArticles,
+        });
+      }
+    } catch (gdeltError) {
+      console.log("GDELT FALLBACK ERROR:", gdeltError.response?.data || gdeltError.message);
+    }
+
+    // Do not hard-fail frontend; return empty live list gracefully.
+    return res.status(200).json({
+      source: "live-fallback-unavailable",
+      totalArticles: 0,
+      articles: [],
+      message: "Live news providers unavailable right now.",
     });
   } catch (error) {
     console.log("LIVE NEWS FALLBACK ERROR:", error.response?.data || error.message);
